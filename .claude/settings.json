@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(convert --version)",
+      "Bash(node -e \":*)",
+      "Bash(head -3 node -e \"const sharp = require\\(''''sharp''''\\)\")",
+      "Bash(python3 -c \"from PIL import Image; print\\(''PIL available''\\)\")"
+    ]
+  }
+}
