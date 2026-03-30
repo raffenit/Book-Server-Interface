@@ -7,29 +7,22 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { kavitaAPI, Library, Series } from '../../services/kavitaAPI';
+import { kavitaAPI, Collection, Series } from '../../services/kavitaAPI';
 import { SeriesCard, useGridColumns } from '../../components/SeriesCard';
 import SeriesContextMenu from '../../components/SeriesContextMenu';
 import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 
-function LibraryTypeLabel(type: number): string {
-  switch (type) {
-    case 0: return 'Manga';
-    case 1: return 'Comic';
-    case 2: return 'Book';
-    default: return 'Library';
-  }
-}
-
-export default function LibrariesScreen() {
+export default function CollectionsScreen() {
   const router = useRouter();
   const { numColumns, cardWidth } = useGridColumns();
   const { ctx: ctxMenu, openMenu, closeMenu, openDetail } = useSeriesContextMenu();
-  const [libraries, setLibraries] = useState<Library[]>([]);
-  const [selectedLibrary, setSelectedLibrary] = useState<Library | null>(null);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [selected, setSelected] = useState<Collection | null>(null);
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesLoading, setSeriesLoading] = useState(false);
@@ -37,16 +30,16 @@ export default function LibrariesScreen() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchLibraries = useCallback(async () => {
+  const fetchCollections = useCallback(async () => {
     try {
-      const libs = await kavitaAPI.getLibraries();
-      setLibraries(libs);
-      if (libs.length > 0 && !selectedLibrary) {
-        await loadLibrarySeries(libs[0], 0);
-        setSelectedLibrary(libs[0]);
+      const data = await kavitaAPI.getCollections();
+      setCollections(data);
+      if (data.length > 0) {
+        await loadSeriesForCollection(data[0], 0);
+        setSelected(data[0]);
       }
     } catch (e) {
-      console.error('Failed to fetch libraries', e);
+      console.error('Failed to fetch collections', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -54,13 +47,13 @@ export default function LibrariesScreen() {
   }, []);
 
   useEffect(() => {
-    fetchLibraries();
+    fetchCollections();
   }, []);
 
-  async function loadLibrarySeries(lib: Library, pageNum: number) {
+  async function loadSeriesForCollection(col: Collection, pageNum: number) {
     setSeriesLoading(true);
     try {
-      const data = await kavitaAPI.getSeriesForLibrary(lib.id, pageNum, 30);
+      const data = await kavitaAPI.getSeriesForCollection(col.id, pageNum, 30);
       if (pageNum === 0) {
         setSeries(data);
       } else {
@@ -69,23 +62,23 @@ export default function LibrariesScreen() {
       setHasMore(data.length === 30);
       setPage(pageNum);
     } catch (e) {
-      console.error('Failed to load series', e);
+      console.error('Failed to load collection series', e);
     } finally {
       setSeriesLoading(false);
     }
   }
 
-  async function selectLibrary(lib: Library) {
-    setSelectedLibrary(lib);
+  async function selectCollection(col: Collection) {
+    setSelected(col);
     setSeries([]);
     setPage(0);
     setHasMore(true);
-    await loadLibrarySeries(lib, 0);
+    await loadSeriesForCollection(col, 0);
   }
 
   function loadMore() {
-    if (hasMore && !seriesLoading && selectedLibrary) {
-      loadLibrarySeries(selectedLibrary, page + 1);
+    if (hasMore && !seriesLoading && selected) {
+      loadSeriesForCollection(selected, page + 1);
     }
   }
 
@@ -97,41 +90,62 @@ export default function LibrariesScreen() {
     );
   }
 
+  if (collections.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.screenHeader}>
+          <Text style={styles.screenTitle}>Collections</Text>
+        </View>
+        <View style={styles.centered}>
+          <Ionicons name="albums-outline" size={56} color={Colors.border} />
+          <Text style={styles.emptyTitle}>No Collections</Text>
+          <Text style={styles.emptyText}>
+            Create collections in Kavita to group your series here.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* Screen header */}
       <View style={styles.screenHeader}>
-        <Text style={styles.screenTitle}>Libraries</Text>
+        <Text style={styles.screenTitle}>Collections</Text>
       </View>
 
-      {/* Library pills */}
+      {/* Collection pills */}
       <FlatList
         horizontal
-        data={libraries}
+        data={collections}
         keyExtractor={(item) => item.id.toString()}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.pillsContainer}
+        style={styles.pillList}
         renderItem={({ item }) => {
-          const active = selectedLibrary?.id === item.id;
+          const active = selected?.id === item.id;
+          const coverUrl = kavitaAPI.getCollectionCoverUrl(item.id);
           return (
             <TouchableOpacity
-              style={[styles.pill, active && styles.pillActive]}
-              onPress={() => selectLibrary(item)}
+              style={[styles.collectionPill, active && styles.collectionPillActive]}
+              onPress={() => selectCollection(item)}
               activeOpacity={0.8}
             >
-              <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                {item.name}
-              </Text>
-              <Text style={[styles.pillType, active && styles.pillTypeActive]}>
-                {LibraryTypeLabel(item.type)}
-              </Text>
+              <Image
+                source={{ uri: coverUrl }}
+                style={styles.pillCover}
+                resizeMode="cover"
+              />
+              <View style={[styles.pillOverlay, active && styles.pillOverlayActive]}>
+                <Text style={[styles.pillText, active && styles.pillTextActive]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         }}
-        style={styles.pillList}
       />
 
-      {/* Series grid */}
+      {/* Series grid for selected collection */}
       <FlatList
         key={numColumns}
         data={series}
@@ -144,14 +158,18 @@ export default function LibrariesScreen() {
             refreshing={refreshing}
             onRefresh={() => {
               setRefreshing(true);
-              if (selectedLibrary) loadLibrarySeries(selectedLibrary, 0);
-              else fetchLibraries();
+              fetchCollections();
             }}
             tintColor={Colors.accent}
           />
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
+        ListHeaderComponent={
+          selected ? (
+            <Text style={styles.collectionLabel}>{selected.title}</Text>
+          ) : null
+        }
         ListFooterComponent={
           seriesLoading ? (
             <View style={styles.footerLoader}>
@@ -162,7 +180,7 @@ export default function LibrariesScreen() {
         ListEmptyComponent={
           !seriesLoading ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>No series found in this library.</Text>
+              <Text style={styles.emptyText}>No series in this collection.</Text>
             </View>
           ) : null
         }
@@ -197,6 +215,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.xl,
   },
   screenHeader: {
     paddingTop: 60,
@@ -217,34 +237,47 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
     gap: Spacing.sm,
   },
-  pill: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1,
+  collectionPill: {
+    width: 100,
+    height: 140,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    borderWidth: 2,
     borderColor: Colors.border,
-    alignItems: 'center',
   },
-  pillActive: {
-    backgroundColor: Colors.accentSoft,
+  collectionPillActive: {
     borderColor: Colors.accent,
   },
+  pillCover: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  pillOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(13,13,18,0.75)',
+    padding: 6,
+  },
+  pillOverlayActive: {
+    backgroundColor: 'rgba(232,168,56,0.25)',
+  },
   pillText: {
-    fontSize: Typography.sm,
+    fontSize: 11,
     fontWeight: Typography.semibold,
     color: Colors.textSecondary,
+    textAlign: 'center',
   },
   pillTextActive: {
     color: Colors.accent,
   },
-  pillType: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    marginTop: 1,
-  },
-  pillTypeActive: {
-    color: Colors.accentDim,
+  collectionLabel: {
+    fontSize: Typography.base,
+    fontWeight: Typography.semibold,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
   },
   grid: {
     paddingHorizontal: Spacing.base,
@@ -259,11 +292,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   empty: {
-    paddingTop: 60,
+    paddingTop: 40,
     alignItems: 'center',
   },
+  emptyTitle: {
+    fontSize: Typography.xl,
+    fontWeight: Typography.bold,
+    color: Colors.textPrimary,
+  },
   emptyText: {
-    color: Colors.textSecondary,
     fontSize: Typography.base,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });

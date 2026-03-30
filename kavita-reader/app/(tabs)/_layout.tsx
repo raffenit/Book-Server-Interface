@@ -25,18 +25,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Library',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="libraries"
-        options={{
-          title: 'Libraries',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="library" size={size} color={color} />
+            <Ionicons name="book" size={size} color={color} />
           ),
         }}
       />
@@ -58,6 +49,10 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* Hidden tabs — files kept for router compatibility */}
+      <Tabs.Screen name="libraries" options={{ href: null }} />
+      <Tabs.Screen name="collections" options={{ href: null }} />
+      <Tabs.Screen name="browse" options={{ href: null }} />
     </Tabs>
   );
 }
