@@ -93,11 +93,19 @@ class KavitaAPI {
 
   async initialize() {
     try {
-      this.serverUrl = (await storage.getItem(STORAGE_KEYS.SERVER_URL)) || '';
+      const storedUrl = (await storage.getItem(STORAGE_KEYS.SERVER_URL)) || '';
       this.apiKey = (await storage.getItem(STORAGE_KEYS.API_KEY)) || '';
       this.jwtToken = (await storage.getItem(STORAGE_KEYS.JWT_TOKEN)) || '';
-      if (this.serverUrl) {
-        this.client.defaults.baseURL = this.serverUrl.replace(/\/$/, '');
+      if (storedUrl) {
+        // Normalize legacy stored URLs that may be missing the protocol
+        let cleanUrl = storedUrl.replace(/\/$/, '');
+        if (!/^https?:\/\//i.test(cleanUrl)) {
+          cleanUrl = 'http://' + cleanUrl;
+        }
+        this.serverUrl = cleanUrl;
+        this.client.defaults.baseURL = cleanUrl;
+        // Persist the fixed URL back to storage
+        await storage.setItem(STORAGE_KEYS.SERVER_URL, cleanUrl);
       }
     } catch (e) {
       console.error('Failed to initialize KavitaAPI from storage', e);
@@ -105,7 +113,10 @@ class KavitaAPI {
   }
 
   async saveCredentials(serverUrl: string, apiKey: string) {
-    const cleanUrl = serverUrl.replace(/\/$/, '');
+    let cleanUrl = serverUrl.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(cleanUrl)) {
+      cleanUrl = 'http://' + cleanUrl;
+    }
     this.serverUrl = cleanUrl;
     this.apiKey = apiKey;
     this.client.defaults.baseURL = cleanUrl;
@@ -120,8 +131,6 @@ class KavitaAPI {
         pluginName: 'KavitaReaderApp',
       },
     });
-    console.log('[KavitaAPI] login response status:', response.status);
-    console.log('[KavitaAPI] login response data:', JSON.stringify(response.data));
     if (response.data?.token) {
       this.jwtToken = response.data.token;
       await storage.setItem(STORAGE_KEYS.JWT_TOKEN, this.jwtToken);

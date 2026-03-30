@@ -59,7 +59,7 @@ export default function LoginScreen() {
               style={[styles.input, urlFocused && styles.inputFocused]}
               value={serverUrl}
               onChangeText={setServerUrl}
-              placeholder="http://192.168.1.100:5000"
+              placeholder="192.168.1.100:5000 or http://..."
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
