@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from './storage';
 
 const STORAGE_KEYS = {
   SERVER_URL: 'kavita_server_url',
@@ -93,9 +93,9 @@ class KavitaAPI {
 
   async initialize() {
     try {
-      this.serverUrl = (await SecureStore.getItemAsync(STORAGE_KEYS.SERVER_URL)) || '';
-      this.apiKey = (await SecureStore.getItemAsync(STORAGE_KEYS.API_KEY)) || '';
-      this.jwtToken = (await SecureStore.getItemAsync(STORAGE_KEYS.JWT_TOKEN)) || '';
+      this.serverUrl = (await storage.getItem(STORAGE_KEYS.SERVER_URL)) || '';
+      this.apiKey = (await storage.getItem(STORAGE_KEYS.API_KEY)) || '';
+      this.jwtToken = (await storage.getItem(STORAGE_KEYS.JWT_TOKEN)) || '';
       if (this.serverUrl) {
         this.client.defaults.baseURL = this.serverUrl.replace(/\/$/, '');
       }
@@ -109,8 +109,8 @@ class KavitaAPI {
     this.serverUrl = cleanUrl;
     this.apiKey = apiKey;
     this.client.defaults.baseURL = cleanUrl;
-    await SecureStore.setItemAsync(STORAGE_KEYS.SERVER_URL, cleanUrl);
-    await SecureStore.setItemAsync(STORAGE_KEYS.API_KEY, apiKey);
+    await storage.setItem(STORAGE_KEYS.SERVER_URL, cleanUrl);
+    await storage.setItem(STORAGE_KEYS.API_KEY, apiKey);
   }
 
   async login(): Promise<boolean> {
@@ -123,7 +123,7 @@ class KavitaAPI {
       });
       if (response.data?.token) {
         this.jwtToken = response.data.token;
-        await SecureStore.setItemAsync(STORAGE_KEYS.JWT_TOKEN, this.jwtToken);
+        await storage.setItem(STORAGE_KEYS.JWT_TOKEN, this.jwtToken);
         return true;
       }
       return false;
@@ -137,9 +137,9 @@ class KavitaAPI {
     this.jwtToken = '';
     this.apiKey = '';
     this.serverUrl = '';
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.JWT_TOKEN);
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.API_KEY);
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.SERVER_URL);
+    await storage.deleteItem(STORAGE_KEYS.JWT_TOKEN);
+    await storage.deleteItem(STORAGE_KEYS.API_KEY);
+    await storage.deleteItem(STORAGE_KEYS.SERVER_URL);
   }
 
   isAuthenticated(): boolean {

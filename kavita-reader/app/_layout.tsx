@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '../constants/theme';
+import { PWAInstallBanner } from '../components/PWAInstallBanner';
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -68,6 +69,7 @@ export default function RootLayout() {
       <AuthProvider>
         <StatusBar style="light" />
         <RootLayoutNav />
+        <PWAInstallBanner />
       </AuthProvider>
     </GestureHandlerRootView>
   );

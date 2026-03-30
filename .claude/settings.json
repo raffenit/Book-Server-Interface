@@ -4,7 +4,11 @@
       "Bash(convert --version)",
       "Bash(node -e \":*)",
       "Bash(head -3 node -e \"const sharp = require\\(''''sharp''''\\)\")",
-      "Bash(python3 -c \"from PIL import Image; print\\(''PIL available''\\)\")"
+      "Bash(python3 -c \"from PIL import Image; print\\(''PIL available''\\)\")",
+      "Bash(openssl version:*)",
+      "Bash(mkdir -p /workspaces/Kavita-Library/kavita-reader/certs)",
+      "Bash(openssl req:*)",
+      "Bash(pkill -f \"node.*serve\")"
     ]
   }
 }

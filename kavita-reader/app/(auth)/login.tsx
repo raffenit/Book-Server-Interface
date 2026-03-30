@@ -9,7 +9,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
@@ -21,17 +20,19 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [urlFocused, setUrlFocused] = useState(false);
   const [keyFocused, setKeyFocused] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleLogin() {
+    setError('');
     if (!serverUrl.trim() || !apiKey.trim()) {
-      Alert.alert('Missing info', 'Please enter both your server URL and API key.');
+      setError('Please enter both your server URL and API key.');
       return;
     }
     setLoading(true);
     const result = await login(serverUrl.trim(), apiKey.trim());
     setLoading(false);
     if (!result.success) {
-      Alert.alert('Connection Failed', result.error || 'Could not connect to Kavita.');
+      setError(result.error || 'Could not connect to Kavita.');
     }
   }
 
@@ -85,6 +86,12 @@ export default function LoginScreen() {
             />
             <Text style={styles.hint}>Found in Kavita → User Settings → Security</Text>
           </View>
+
+          {error !== '' && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.loginButton, loading && styles.loginButtonDisabled]}
@@ -187,6 +194,18 @@ const styles = StyleSheet.create({
     fontSize: Typography.xs,
     color: Colors.textMuted,
     marginTop: 2,
+  },
+  errorBox: {
+    backgroundColor: 'rgba(224, 92, 92, 0.12)',
+    borderWidth: 1,
+    borderColor: Colors.error,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+  },
+  errorText: {
+    fontSize: Typography.sm,
+    color: Colors.error,
+    lineHeight: 18,
   },
   loginButton: {
     backgroundColor: Colors.accent,
