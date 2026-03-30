@@ -24,7 +24,7 @@ export default function PDFReaderScreen() {
 
   const [showHeader, setShowHeader] = useState(true);
   const [loading, setLoading] = useState(true);
-  const headerTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const headerTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const chapterId = Number(params.chapterId);
   const pdfUrl = kavitaAPI.getPdfReaderUrl(chapterId);
