@@ -388,6 +388,21 @@ class KavitaAPI {
     return response.data;
   }
 
+  // ── Book (EPUB) reader ───────────────────────────────────────────────────────
+
+  async getBookInfo(chapterId: number): Promise<{ pages: number; bookTitle?: string }> {
+    const response = await this.client.get(`/api/book/${chapterId}/book-info`);
+    return response.data;
+  }
+
+  async getBookPage(chapterId: number, page: number): Promise<string> {
+    const response = await this.client.get(`/api/book/${chapterId}/book-page`, {
+      params: { page },
+      responseType: 'text',
+    });
+    return response.data;
+  }
+
   // ── Reader ──────────────────────────────────────────────────────────────────
 
   async getChapterInfo(chapterId: number): Promise<ChapterInfo | null> {
@@ -483,6 +498,10 @@ class KavitaAPI {
 
   getEpubReaderUrl(chapterId: number): string {
     return `${this.serverUrl}/api/Reader/epub?chapterId=${chapterId}&apiKey=${this.apiKey}`;
+  }
+
+  getPdfPageImageUrl(chapterId: number, page: number): string {
+    return `${this.serverUrl}/api/reader/image?chapterId=${chapterId}&page=${page}&apiKey=${this.apiKey}&extractPdf=true`;
   }
 
   // ── Bookmarks ────────────────────────────────────────────────────────────────

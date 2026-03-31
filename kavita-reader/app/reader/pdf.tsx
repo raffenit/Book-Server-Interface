@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
+  Image,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { kavitaAPI } from '../../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
@@ -21,190 +21,148 @@ export default function PDFReaderScreen() {
     seriesId: string;
     volumeId: string;
   }>();
-
-  const [showHeader, setShowHeader] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const headerTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
   const chapterId = Number(params.chapterId);
-  const pdfUrl = kavitaAPI.getPdfReaderUrl(chapterId);
-  const token = kavitaAPI.getToken();
 
-  // HTML that embeds the PDF using PDF.js via CDN
-  const pdfHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #1a1a1a; height: 100vh; overflow: hidden; }
-    #pdf-container {
-      width: 100%;
-      height: 100vh;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    canvas {
-      display: block;
-      margin: 8px auto;
-      max-width: 100%;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    }
-    #loading {
-      color: #e8a838;
-      font-family: sans-serif;
-      font-size: 16px;
-      text-align: center;
-      padding-top: 40vh;
-    }
-    #error {
-      color: #e05c5c;
-      font-family: sans-serif;
-      font-size: 14px;
-      text-align: center;
-      padding: 20px;
-      display: none;
-    }
-  </style>
-</head>
-<body>
-  <div id="pdf-container">
-    <div id="loading">Loading PDF…</div>
-    <div id="error"></div>
-  </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const [loading, setLoading] = useState(true);   // initial chapter info load
+  const [pageLoading, setPageLoading] = useState(true); // current page image load
+  const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-    async function loadPDF() {
+  const pageUrl = kavitaAPI.getPdfPageImageUrl(chapterId, currentPage);
+
+  useEffect(() => {
+    (async () => {
       try {
-        const loadingTask = pdfjsLib.getDocument({
-          url: '${pdfUrl}',
-          httpHeaders: { 'Authorization': 'Bearer ${token}' },
-          withCredentials: false,
-        });
-
-        const pdf = await loadingTask.promise;
-        document.getElementById('loading').style.display = 'none';
-        const container = document.getElementById('pdf-container');
-
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: window.devicePixelRatio || 2 });
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.height = viewport.height;
-          canvas.width = viewport.width;
-          canvas.style.width = Math.floor(viewport.width / (window.devicePixelRatio || 2)) + 'px';
-          canvas.style.height = Math.floor(viewport.height / (window.devicePixelRatio || 2)) + 'px';
-          container.appendChild(canvas);
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
-            JSON.stringify({ type: 'page', current: pageNum, total: pdf.numPages })
-          );
-        }
-      } catch (err) {
-        document.getElementById('loading').style.display = 'none';
-        const errEl = document.getElementById('error');
-        errEl.style.display = 'block';
-        errEl.textContent = 'Failed to load PDF: ' + err.message;
-        window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
-          JSON.stringify({ type: 'error', message: err.message })
-        );
+        const info = await kavitaAPI.getChapterInfo(chapterId);
+        setTotalPages(info?.pages ?? 0);
+      } catch (e: any) {
+        setError(e?.message ?? 'Failed to load PDF');
+      } finally {
+        setLoading(false);
       }
-    }
-    loadPDF();
-  </script>
-</body>
-</html>`;
+    })();
+  }, [chapterId]);
 
-  function toggleHeader() {
-    setShowHeader(v => !v);
+  function goToPage(page: number) {
+    setPageLoading(true);
+    setCurrentPage(page);
+    kavitaAPI.saveReadingProgress(
+      chapterId, page,
+      Number(params.seriesId), Number(params.volumeId)
+    );
+  }
+
+  const canPrev = currentPage > 0 && !pageLoading;
+  const canNext = currentPage < totalPages - 1 && !pageLoading;
+  const progressPct = totalPages > 0 ? ((currentPage + 1) / totalPages) * 100 : 0;
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator color={Colors.accent} size="large" />
+        <Text style={styles.loadingText}>Loading PDF…</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Ionicons name="alert-circle-outline" size={40} color={Colors.error} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.goBack}>
+          <Text style={styles.goBackText}>← Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
       <StatusBar hidden />
 
-      {/* Header overlay */}
-      {showHeader && (
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {params.title || 'PDF Reader'}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>{params.title || 'PDF Reader'}</Text>
+        <View style={styles.headerBtn} />
+      </View>
+
+      {/* Page image */}
+      <View style={styles.pageArea}>
+        <Image
+          key={currentPage}
+          source={{ uri: pageUrl }}
+          style={styles.pageImage}
+          resizeMode="contain"
+          onLoadStart={() => setPageLoading(true)}
+          onLoadEnd={() => setPageLoading(false)}
+          onError={() => {
+            setPageLoading(false);
+            setError(`Failed to load page ${currentPage + 1}`);
+          }}
+        />
+        {pageLoading && (
+          <View style={styles.pageLoadingOverlay}>
+            <ActivityIndicator color={Colors.accent} />
+          </View>
+        )}
+      </View>
+
+      {/* Footer nav */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.navBtn, !canPrev && styles.navBtnDisabled]}
+          onPress={() => goToPage(currentPage - 1)}
+          disabled={!canPrev}
+        >
+          <Ionicons name="chevron-back" size={24} color={canPrev ? Colors.textPrimary : Colors.textMuted} />
+        </TouchableOpacity>
+
+        <View style={styles.progressInfo}>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progressPct}%` as any }]} />
+          </View>
+          <Text style={styles.progressText}>
+            {totalPages > 0 ? `${currentPage + 1} / ${totalPages}` : '…'}
           </Text>
-          <View style={styles.backBtn} />
         </View>
-      )}
 
-      {/* Loading overlay */}
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator color={Colors.accent} size="large" />
-          <Text style={styles.loadingText}>Loading PDF…</Text>
-        </View>
-      )}
-
-      <WebView
-        style={styles.webview}
-        source={{ html: pdfHtml }}
-        onLoadEnd={() => setLoading(false)}
-        javaScriptEnabled
-        scrollEnabled
-        onTouchEnd={toggleHeader}
-        onMessage={(event) => {
-          try {
-            const data = JSON.parse(event.nativeEvent.data);
-            if (data.type === 'page') {
-              // Could track page progress here
-              kavitaAPI.saveReadingProgress(
-                chapterId,
-                data.current,
-                Number(params.seriesId),
-                Number(params.volumeId)
-              );
-            }
-          } catch {}
-        }}
-        mixedContentMode="always"
-        originWhitelist={['*']}
-      />
+        <TouchableOpacity
+          style={[styles.navBtn, !canNext && styles.navBtnDisabled]}
+          onPress={() => goToPage(currentPage + 1)}
+          disabled={!canNext}
+        >
+          <Ionicons name="chevron-forward" size={24} color={canNext ? Colors.textPrimary : Colors.textMuted} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1, backgroundColor: '#111' },
+  centered: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.md,
+    padding: Spacing.xl,
   },
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 44,
     paddingHorizontal: Spacing.base,
     paddingBottom: Spacing.md,
-    backgroundColor: 'rgba(13,13,18,0.9)',
+    backgroundColor: 'rgba(13,13,18,0.92)',
+    zIndex: 10,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  headerBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
@@ -212,20 +170,58 @@ const styles = StyleSheet.create({
     fontWeight: Typography.semibold,
     color: Colors.textPrimary,
   },
-  loadingOverlay: {
+  pageArea: {
+    flex: 1,
+    backgroundColor: '#111',
+    position: 'relative',
+  },
+  pageImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  pageLoadingOverlay: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 5,
-    backgroundColor: Colors.background,
+    top: 0, bottom: 0, left: 0, right: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Spacing.md,
+    backgroundColor: 'rgba(17,17,17,0.6)',
   },
-  loadingText: {
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 30,
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: 'rgba(13,13,18,0.92)',
+    gap: Spacing.sm,
+  },
+  navBtn: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+  },
+  navBtnDisabled: { opacity: 0.4 },
+  progressInfo: { flex: 1, alignItems: 'center', gap: 4 },
+  progressTrack: {
+    width: '100%',
+    height: 3,
+    backgroundColor: Colors.progressTrack,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', backgroundColor: Colors.accent },
+  progressText: { fontSize: Typography.xs, color: Colors.textSecondary },
+  loadingText: { fontSize: Typography.base, color: Colors.textSecondary },
+  errorText: {
     fontSize: Typography.base,
-    color: Colors.textSecondary,
+    color: Colors.error,
+    textAlign: 'center',
+    lineHeight: 22,
   },
+  goBack: { marginTop: Spacing.sm },
+  goBackText: { color: Colors.accent, fontSize: Typography.base },
 });

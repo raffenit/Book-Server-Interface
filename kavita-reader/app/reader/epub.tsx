@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,40 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
-  Animated,
+  Platform,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { kavitaAPI } from '../../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+
+const THEMES = {
+  dark:  { bg: '#1a1a22', text: '#e8e0d0', link: '#e8a838' },
+  sepia: { bg: '#f4ecd8', text: '#3b2e1e', link: '#8b6340' },
+  light: { bg: '#ffffff', text: '#1a1a1a', link: '#2563eb' },
+};
+type ThemeName = 'dark' | 'sepia' | 'light';
+
+function buildPageHtml(rawHtml: string, theme: typeof THEMES.dark, baseHref: string): string {
+  // Rewrite protocol-relative URLs like //host:port/api/book/ → /api/book/
+  const rewritten = rawHtml.replace(/\/\/[^/"'\s]+?(\/api\/book\/)/g, '$1');
+  return `<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=3">
+<base href="${baseHref}">
+<style>
+*{box-sizing:border-box}
+html{background:${theme.bg};-webkit-text-size-adjust:100%}
+body{margin:0 auto;padding:24px 20px 60px;background:${theme.bg};color:${theme.text};
+  font-family:Georgia,"Times New Roman",serif;font-size:18px;line-height:1.75;max-width:680px}
+a{color:${theme.link}}
+img{max-width:100%;height:auto;display:block;margin:1em auto}
+p{margin:0 0 1em}
+h1,h2,h3,h4,h5,h6{color:${theme.text};line-height:1.3;margin:1.2em 0 .5em}
+blockquote{border-left:3px solid ${theme.link};margin:1em 0;padding-left:1em;opacity:.85}
+pre,code{background:rgba(128,128,128,.15);border-radius:4px;padding:.1em .3em;font-size:.9em}
+</style></head><body>${rewritten}</body></html>`;
+}
 
 export default function EpubReaderScreen() {
   const router = useRouter();
@@ -22,269 +49,172 @@ export default function EpubReaderScreen() {
     seriesId: string;
     volumeId: string;
   }>();
+  const chapterId = Number(params.chapterId);
 
-  const [showHeader, setShowHeader] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [readerTheme, setReaderTheme] = useState<'dark' | 'sepia' | 'light'>('dark');
-  const webViewRef = useRef<WebView>(null);
+  const [rawHtml, setRawHtml] = useState('');
+  const [theme, setTheme] = useState<ThemeName>('dark');
 
-  const chapterId = Number(params.chapterId);
-  const epubUrl = kavitaAPI.getEpubReaderUrl(chapterId);
-  const token = kavitaAPI.getToken();
+  const baseHref =
+    Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.origin + '/'
+      : '/';
 
-  const themes = {
-    dark: { bg: '#1a1a22', text: '#e8e0d0', link: '#e8a838' },
-    sepia: { bg: '#f4ecd8', text: '#3b2e1e', link: '#8b6340' },
-    light: { bg: '#ffffff', text: '#1a1a1a', link: '#2563eb' },
-  };
+  // Rebuild page HTML whenever raw content or theme changes (no extra network call on theme switch)
+  const pageHtml = rawHtml ? buildPageHtml(rawHtml, THEMES[theme], baseHref) : '';
 
-  const t = themes[readerTheme];
-
-  const epubHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: ${t.bg};
+  async function loadPage(page: number) {
+    setLoading(true);
+    setError('');
+    try {
+      const html = await kavitaAPI.getBookPage(chapterId, page);
+      setRawHtml(html);
+      setCurrentPage(page);
+      kavitaAPI.saveReadingProgress(
+        chapterId, page,
+        Number(params.seriesId), Number(params.volumeId)
+      );
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to load page');
+    } finally {
+      setLoading(false);
     }
-    #reader {
-      width: 100vw;
-      height: 100vh;
-    }
-    #reader iframe {
-      border: none !important;
-    }
-  </style>
-</head>
-<body>
-  <div id="reader"></div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.3.93/epub.min.js"></script>
-  <script>
-    let book, rendition, currentLocation;
-
-    async function init() {
-      try {
-        // Fetch the EPUB with auth header
-        const resp = await fetch('${epubUrl}', {
-          headers: { 'Authorization': 'Bearer ${token}' }
-        });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const arrayBuffer = await resp.arrayBuffer();
-
-        book = ePub(arrayBuffer);
-        rendition = book.renderTo('reader', {
-          width: '100%',
-          height: '100%',
-          spread: 'none',
-          flow: 'paginated',
-        });
-
-        rendition.themes.register('custom', {
-          body: {
-            background: '${t.bg}',
-            color: '${t.text}',
-            'font-size': '18px',
-            'line-height': '1.7',
-            'font-family': 'Georgia, serif',
-            padding: '20px 24px !important',
-          },
-          a: { color: '${t.link}' },
-          'p': { 'margin-bottom': '1em' },
-        });
-        rendition.themes.select('custom');
-
-        await rendition.display();
-        notify({ type: 'loaded' });
-
-        book.locations.generate(1024).then(() => {
-          const total = book.locations.total;
-          notify({ type: 'total', total });
-        });
-
-        rendition.on('relocated', (location) => {
-          currentLocation = location;
-          const page = book.locations.percentageFromCfi(location.start.cfi);
-          notify({ type: 'progress', page: Math.round(page * 100), cfi: location.start.cfi });
-        });
-
-        // Swipe to turn pages
-        rendition.on('touchstart', (event) => { window._touchX = event.changedTouches[0].clientX; });
-        rendition.on('touchend', (event) => {
-          const dx = event.changedTouches[0].clientX - window._touchX;
-          if (Math.abs(dx) > 40) {
-            if (dx < 0) rendition.next();
-            else rendition.prev();
-          } else {
-            notify({ type: 'tap' });
-          }
-        });
-
-      } catch (err) {
-        notify({ type: 'error', message: err.message });
-      }
-    }
-
-    function notify(data) {
-      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(data));
-    }
-
-    window.goNext = () => rendition && rendition.next();
-    window.goPrev = () => rendition && rendition.prev();
-
-    init();
-  </script>
-</body>
-</html>`;
-
-  function sendCommand(cmd: string) {
-    webViewRef.current?.injectJavaScript(`${cmd}(); true;`);
   }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const info = await kavitaAPI.getBookInfo(chapterId);
+        setTotalPages(info.pages ?? 0);
+        await loadPage(0);
+      } catch (e: any) {
+        setError(e?.message ?? 'Failed to load book');
+        setLoading(false);
+      }
+    })();
+  }, [chapterId]);
 
   function cycleTheme() {
-    const themes: Array<'dark' | 'sepia' | 'light'> = ['dark', 'sepia', 'light'];
-    const idx = themes.indexOf(readerTheme);
-    setReaderTheme(themes[(idx + 1) % themes.length]);
+    const order: ThemeName[] = ['dark', 'sepia', 'light'];
+    setTheme(prev => order[(order.indexOf(prev) + 1) % order.length]);
   }
 
-  function handleMessage(event: any) {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      switch (data.type) {
-        case 'loaded':
-          setLoading(false);
-          break;
-        case 'total':
-          setTotalPages(data.total);
-          break;
-        case 'progress':
-          setCurrentPage(data.page);
-          kavitaAPI.saveReadingProgress(
-            chapterId,
-            data.page,
-            Number(params.seriesId),
-            Number(params.volumeId)
-          );
-          break;
-        case 'tap':
-          setShowHeader(v => !v);
-          break;
-        case 'error':
-          setLoading(false);
-          break;
-      }
-    } catch {}
+  const themeIcon = { dark: 'moon' as const, sepia: 'cafe' as const, light: 'sunny' as const }[theme];
+  const t = THEMES[theme];
+
+  if (error && !loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: t.bg }]}>
+        <View style={styles.errorCenter}>
+          <Ionicons name="alert-circle-outline" size={40} color={Colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.goBack}>
+            <Text style={styles.goBackText}>← Go back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   }
 
-  const themeIcons: Record<string, string> = {
-    dark: 'moon',
-    sepia: 'cafe',
-    light: 'sunny',
-  };
+  const canPrev = currentPage > 0 && !loading;
+  const canNext = currentPage < totalPages - 1 && !loading;
+  const progressPct = totalPages > 0 ? ((currentPage + 1) / totalPages) * 100 : 0;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: t.bg }]}>
       <StatusBar hidden />
 
-      {/* Top header */}
-      {showHeader && (
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {params.title || 'EPUB Reader'}
-          </Text>
-          <TouchableOpacity style={styles.headerBtn} onPress={cycleTheme}>
-            <Ionicons name={themeIcons[readerTheme] as any} size={20} color={Colors.accent} />
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>{params.title || 'Reader'}</Text>
+        <TouchableOpacity style={styles.headerBtn} onPress={cycleTheme}>
+          <Ionicons name={themeIcon} size={20} color={Colors.accent} />
+        </TouchableOpacity>
+      </View>
 
-      {/* Loading */}
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator color={Colors.accent} size="large" />
-          <Text style={styles.loadingText}>Loading book…</Text>
-        </View>
-      )}
-
-      <WebView
-        ref={webViewRef}
-        style={styles.webview}
-        source={{ html: epubHtml }}
-        javaScriptEnabled
-        scrollEnabled={false}
-        onMessage={handleMessage}
-        mixedContentMode="always"
-        originWhitelist={['*']}
-        allowFileAccess
-      />
-
-      {/* Bottom nav */}
-      {showHeader && (
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.navBtn} onPress={() => sendCommand('goPrev')}>
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.progressInfo}>
-            {totalPages > 0 ? (
-              <>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[styles.progressFill, { width: `${currentPage}%` }]}
-                  />
-                </View>
-                <Text style={styles.progressText}>{currentPage}%</Text>
-              </>
-            ) : (
-              <Text style={styles.progressText}>Loading locations…</Text>
-            )}
+      {/* Page content */}
+      <View style={styles.contentArea}>
+        {Platform.OS === 'web' ? (
+          // @ts-ignore — iframe is a valid DOM element in React Native Web
+          <iframe
+            srcDoc={pageHtml}
+            style={{
+              border: 'none',
+              width: '100%',
+              height: '100%',
+              display: 'block',
+              backgroundColor: t.bg,
+            }}
+            sandbox="allow-scripts allow-same-origin"
+            title="Book page"
+          />
+        ) : (
+          <View style={styles.nativePlaceholder}>
+            <Ionicons name="book-outline" size={40} color={Colors.textMuted} />
+            <Text style={styles.nativeText}>
+              EPUB reading is available in the web version of this app.
+            </Text>
           </View>
-          <TouchableOpacity style={styles.navBtn} onPress={() => sendCommand('goNext')}>
-            <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Loading overlay */}
+      {loading && (
+        <View style={[styles.loadingOverlay, { backgroundColor: t.bg }]}>
+          <ActivityIndicator color={Colors.accent} size="large" />
+          <Text style={styles.loadingText}>Loading…</Text>
         </View>
       )}
+
+      {/* Footer nav */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.navBtn, !canPrev && styles.navBtnDisabled]}
+          onPress={() => loadPage(currentPage - 1)}
+          disabled={!canPrev}
+        >
+          <Ionicons name="chevron-back" size={24} color={canPrev ? Colors.textPrimary : Colors.textMuted} />
+        </TouchableOpacity>
+
+        <View style={styles.progressInfo}>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progressPct}%` as any }]} />
+          </View>
+          <Text style={styles.progressText}>
+            {totalPages > 0 ? `${currentPage + 1} / ${totalPages}` : '…'}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.navBtn, !canNext && styles.navBtnDisabled]}
+          onPress={() => loadPage(currentPage + 1)}
+          disabled={!canNext}
+        >
+          <Ionicons name="chevron-forward" size={24} color={canNext ? Colors.textPrimary : Colors.textMuted} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a1a22',
-  },
-  webview: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 44,
     paddingHorizontal: Spacing.base,
     paddingBottom: Spacing.md,
     backgroundColor: 'rgba(13,13,18,0.92)',
+    zIndex: 10,
   },
-  headerBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  headerBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
@@ -292,12 +222,21 @@ const styles = StyleSheet.create({
     fontWeight: Typography.semibold,
     color: Colors.textPrimary,
   },
+  contentArea: { flex: 1 },
+  nativePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.md,
+    padding: Spacing.xl,
+  },
+  nativeText: {
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    fontSize: Typography.base,
+    lineHeight: 22,
+  },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: 30,
@@ -305,6 +244,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     backgroundColor: 'rgba(13,13,18,0.92)',
     gap: Spacing.sm,
+    zIndex: 10,
   },
   navBtn: {
     width: 44,
@@ -314,11 +254,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
   },
-  progressInfo: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
+  navBtnDisabled: { opacity: 0.4 },
+  progressInfo: { flex: 1, alignItems: 'center', gap: 4 },
   progressTrack: {
     width: '100%',
     height: 3,
@@ -326,28 +263,30 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     overflow: 'hidden',
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.accent,
-  },
-  progressText: {
-    fontSize: Typography.xs,
-    color: Colors.textSecondary,
-  },
+  progressFill: { height: '100%', backgroundColor: Colors.accent },
+  progressText: { fontSize: Typography.xs, color: Colors.textSecondary },
   loadingOverlay: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
+    top: 0, bottom: 0, left: 0, right: 0,
     zIndex: 20,
-    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.md,
   },
-  loadingText: {
-    fontSize: Typography.base,
-    color: Colors.textSecondary,
+  loadingText: { fontSize: Typography.base, color: Colors.textSecondary },
+  errorCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.md,
+    padding: Spacing.xl,
   },
+  errorText: {
+    fontSize: Typography.base,
+    color: Colors.error,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  goBack: { marginTop: Spacing.sm },
+  goBackText: { color: Colors.accent, fontSize: Typography.base },
 });

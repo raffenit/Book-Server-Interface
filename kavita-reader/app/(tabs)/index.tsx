@@ -8,21 +8,16 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
+  Platform,
+  GestureResponderEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { kavitaAPI, Series, Genre, Tag, Collection } from '../../services/kavitaAPI';
+import { kavitaAPI, Series, Genre, Tag } from '../../services/kavitaAPI';
 import { SeriesCard, SeriesCardLarge, useGridColumns } from '../../components/SeriesCard';
 import SeriesContextMenu from '../../components/SeriesContextMenu';
+import GenreTagContextMenu, { ChipType } from '../../components/GenreTagContextMenu';
 import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
-
-// ── Format options ─────────────────────────────────────────────────────────────
-
-const FORMATS: { id: number; label: string }[] = [
-  { id: 4, label: 'PDF' },
-  { id: 3, label: 'EPUB' },
-  { id: 1, label: 'CBZ' },
-];
 
 // ── Inline filter row ──────────────────────────────────────────────────────────
 
@@ -31,11 +26,13 @@ function FilterRow<T extends { id: number; title?: string; label?: string; name?
   items,
   selectedId,
   onSelect,
+  onChipContextMenu,
 }: {
   label: string;
   items: T[];
   selectedId: number | null;
   onSelect: (id: number | null) => void;
+  onChipContextMenu?: (item: T, x: number, y: number) => void;
 }) {
   return (
     <View style={styles.filterRow}>
@@ -45,7 +42,7 @@ function FilterRow<T extends { id: number; title?: string; label?: string; name?
         contentContainerStyle={styles.filterRowContent}
       >
         <Text style={styles.filterRowLabel}>{label}</Text>
-        {/* "All" chip */}
+        {/* "All" chip — no context menu */}
         <TouchableOpacity
           style={[styles.chip, selectedId === null && styles.chipActive]}
           onPress={() => onSelect(null)}
@@ -57,18 +54,54 @@ function FilterRow<T extends { id: number; title?: string; label?: string; name?
           const name = (item as any).title ?? (item as any).label ?? (item as any).name ?? '';
           const active = selectedId === item.id;
           return (
-            <TouchableOpacity
+            <ChipWithContextMenu
               key={item.id}
-              style={[styles.chip, active && styles.chipActive]}
+              active={active}
+              name={name}
               onPress={() => onSelect(active ? null : item.id)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{name}</Text>
-            </TouchableOpacity>
+              onContextMenu={onChipContextMenu ? (x, y) => onChipContextMenu(item, x, y) : undefined}
+            />
           );
         })}
       </ScrollView>
     </View>
+  );
+}
+
+function ChipWithContextMenu({
+  active, name, onPress, onContextMenu,
+}: {
+  active: boolean;
+  name: string;
+  onPress: () => void;
+  onContextMenu?: (x: number, y: number) => void;
+}) {
+  const ref = React.useRef<any>(null);
+
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !onContextMenu) return;
+    const el = ref.current as HTMLElement | null;
+    if (!el) return;
+    const handler = (e: MouseEvent) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); };
+    el.addEventListener('contextmenu', handler);
+    return () => el.removeEventListener('contextmenu', handler);
+  }, [onContextMenu]);
+
+  function handleLongPress(e: GestureResponderEvent) {
+    onContextMenu?.(e.nativeEvent.pageX, e.nativeEvent.pageY);
+  }
+
+  return (
+    <TouchableOpacity
+      ref={ref}
+      style={[styles.chip, active && styles.chipActive]}
+      onPress={onPress}
+      onLongPress={onContextMenu ? handleLongPress : undefined}
+      delayLongPress={400}
+      activeOpacity={0.75}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{name}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -79,14 +112,27 @@ export default function HomeScreen() {
   const { numColumns, cardWidth } = useGridColumns();
   const { ctx: ctxMenu, openMenu, closeMenu, openDetail } = useSeriesContextMenu();
 
+  const [chipMenu, setChipMenu] = useState<{
+    visible: boolean;
+    itemId: number | null;
+    itemTitle: string;
+    itemType: ChipType | null;
+    position: { x: number; y: number };
+  }>({ visible: false, itemId: null, itemTitle: '', itemType: null, position: { x: 0, y: 0 } });
+
+  function openChipMenu(item: { id: number; title?: string }, type: ChipType, x: number, y: number) {
+    setChipMenu({ visible: true, itemId: item.id, itemTitle: item.title ?? '', itemType: type, position: { x, y } });
+  }
+
+  function closeChipMenu() {
+    setChipMenu(prev => ({ ...prev, visible: false }));
+  }
+
   const [genres, setGenres] = useState<Genre[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [collections, setCollections] = useState<Collection[]>([]);
 
   const [selectedGenreId, setSelectedGenreId] = useState<number | null>(null);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
-  const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(null);
-  const [selectedFormatId, setSelectedFormatId] = useState<number | null>(null);
 
   const [recentSeries, setRecentSeries] = useState<Series[]>([]);
   const [series, setSeries] = useState<Series[]>([]);
@@ -96,20 +142,18 @@ export default function HomeScreen() {
   const [seriesLoading, setSeriesLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const filterKey = `${selectedGenreId}|${selectedTagId}|${selectedCollectionId}|${selectedFormatId}`;
+  const filterKey = `${selectedGenreId}|${selectedTagId}`;
   const prevFilterKey = useRef(filterKey);
 
   const fetchMetadata = useCallback(async () => {
     try {
-      const [g, t, c, recent] = await Promise.all([
+      const [g, t, recent] = await Promise.all([
         kavitaAPI.getGenres(),
         kavitaAPI.getTags(),
-        kavitaAPI.getCollections(),
         kavitaAPI.getRecentlyRead(),
       ]);
       setGenres(g);
       setTags(t);
-      setCollections(c);
       setRecentSeries(recent.slice(0, 5));
     } catch (e) {
       console.error('Failed to fetch metadata', e);
@@ -119,24 +163,19 @@ export default function HomeScreen() {
   const fetchSeries = useCallback(async (pageNum: number, reset: boolean) => {
     setSeriesLoading(true);
     try {
-      const pageSize = selectedFormatId !== null ? 60 : 30;
+      const pageSize = 30;
       let raw: Series[] = [];
       if (selectedGenreId !== null) {
         raw = await kavitaAPI.getSeriesByGenre(selectedGenreId, pageNum, pageSize);
       } else if (selectedTagId !== null) {
         raw = await kavitaAPI.getSeriesByTag(selectedTagId, pageNum, pageSize);
-      } else if (selectedCollectionId !== null) {
-        raw = await kavitaAPI.getSeriesForCollection(selectedCollectionId, pageNum, pageSize);
       } else {
         raw = await kavitaAPI.getAllSeries(pageNum, pageSize);
       }
-      const filtered = selectedFormatId !== null
-        ? raw.filter(s => s.format === selectedFormatId)
-        : raw;
       if (reset) {
-        setSeries(filtered);
+        setSeries(raw);
       } else {
-        setSeries(prev => [...prev, ...filtered]);
+        setSeries(prev => [...prev, ...raw]);
       }
       setHasMore(raw.length === pageSize);
       setPage(pageNum);
@@ -147,7 +186,7 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedGenreId, selectedTagId, selectedCollectionId, selectedFormatId]);
+  }, [selectedGenreId, selectedTagId]);
 
   useEffect(() => {
     fetchMetadata();
@@ -174,10 +213,7 @@ export default function HomeScreen() {
     fetchSeries(page + 1, false);
   }
 
-  const hasActiveFilter = selectedGenreId !== null || selectedTagId !== null
-    || selectedCollectionId !== null || selectedFormatId !== null;
-
-  const formatItems = FORMATS.map(f => ({ id: f.id, title: f.label }));
+  const hasActiveFilter = selectedGenreId !== null || selectedTagId !== null;
 
   if (loading) {
     return (
@@ -201,8 +237,12 @@ export default function HomeScreen() {
         onEndReachedThreshold={0.3}
         ListHeaderComponent={
           <View>
+            {/* Header */}
             <View style={styles.header}>
               <Text style={styles.title}>Your Library</Text>
+              <Text style={styles.subtitle}>
+                {series.length > 0 ? `${series.length}${hasMore ? '+' : ''} series` : ''}
+              </Text>
             </View>
 
             {/* Continue Reading — hidden when filters are active */}
@@ -227,40 +267,28 @@ export default function HomeScreen() {
                 items={genres}
                 selectedId={selectedGenreId}
                 onSelect={setSelectedGenreId}
+                onChipContextMenu={(item, x, y) => openChipMenu(item, 'genre', x, y)}
               />
               <FilterRow
                 label="Tag"
                 items={tags}
                 selectedId={selectedTagId}
                 onSelect={setSelectedTagId}
-              />
-              <FilterRow
-                label="Collection"
-                items={collections}
-                selectedId={selectedCollectionId}
-                onSelect={setSelectedCollectionId}
-              />
-              <FilterRow
-                label="Format"
-                items={formatItems}
-                selectedId={selectedFormatId}
-                onSelect={setSelectedFormatId}
+                onChipContextMenu={(item, x, y) => openChipMenu(item, 'tag', x, y)}
               />
             </View>
 
             {hasActiveFilter && (
               <View style={styles.activeFilterBar}>
                 <Text style={styles.activeFilterText}>
-                  {series.length} result{series.length !== 1 ? 's' : ''}
+                  {series.length}{hasMore ? '+' : ''} result{series.length !== 1 ? 's' : ''}
                   {seriesLoading ? '…' : ''}
                 </Text>
                 <TouchableOpacity onPress={() => {
                   setSelectedGenreId(null);
                   setSelectedTagId(null);
-                  setSelectedCollectionId(null);
-                  setSelectedFormatId(null);
                 }}>
-                  <Text style={styles.clearText}>Clear all</Text>
+                  <Text style={styles.clearText}>Clear</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -303,6 +331,16 @@ export default function HomeScreen() {
         onClose={closeMenu}
         onOpenDetail={openDetail}
       />
+
+      <GenreTagContextMenu
+        visible={chipMenu.visible}
+        itemId={chipMenu.itemId}
+        itemTitle={chipMenu.itemTitle}
+        itemType={chipMenu.itemType}
+        position={chipMenu.position}
+        onClose={closeChipMenu}
+        onRemoved={() => { closeChipMenu(); fetchMetadata(); fetchSeries(0, true); }}
+      />
     </>
   );
 }
@@ -322,9 +360,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   header: {
-    paddingTop: 60,
+    paddingTop: 56,
     paddingHorizontal: Spacing.base,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    marginBottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: Typography.xxxl,
@@ -332,6 +376,12 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontFamily: Typography.serif,
     lineHeight: 42,
+  },
+  subtitle: {
+    fontSize: Typography.sm,
+    color: Colors.textMuted,
+    fontWeight: Typography.medium,
+    paddingBottom: 4,
   },
   section: {
     paddingHorizontal: Spacing.base,
