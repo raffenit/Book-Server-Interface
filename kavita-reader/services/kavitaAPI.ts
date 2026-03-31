@@ -290,14 +290,7 @@ class KavitaAPI {
   }
 
   async updateSeriesMetadata(metadata: SeriesMetadata): Promise<void> {
-    // Try the v0.8 endpoint first, fall back to v0.7 format
-    try {
-      await this.client.post('/api/Series/metadata', metadata);
-    } catch {
-      await this.client.post('/api/Metadata/series-update', {
-        seriesMetadatas: [metadata],
-      });
-    }
+    await this.client.post('/api/Series/metadata', { seriesMetadata: metadata });
   }
 
   // ── Collections ─────────────────────────────────────────────────────────────
@@ -311,26 +304,26 @@ class KavitaAPI {
     }
   }
 
-  async getSeriesForCollection(collectionId: number, page = 0, pageSize = 30): Promise<Series[]> {
-    const response = await this.client.post('/api/Series/all', {
-      collectionTags: [collectionId],
-      pageNumber: page,
-      pageSize,
+  async getSeriesForCollection(collectionId: number): Promise<Series[]> {
+    const response = await this.client.get('/api/Series/series-by-collection', {
+      params: { collectionId },
     });
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   }
 
   async addSeriesToCollection(collectionId: number, seriesId: number): Promise<void> {
-    // Fetch ALL current series (up to 500) then add this one
-    const current = await this.getSeriesForCollection(collectionId, 0, 500);
-    const ids = [...new Set([...current.map(s => s.id), seriesId])];
-    await this.client.post('/api/Collection/update-series', { id: collectionId, seriesIds: ids });
+    await this.client.post('/api/Collection/update-for-series', {
+      collectionTagId: collectionId,
+      collectionTagTitle: '',
+      seriesIds: [seriesId],
+    });
   }
 
-  async removeSeriesFromCollection(collectionId: number, seriesId: number): Promise<void> {
-    const current = await this.getSeriesForCollection(collectionId, 0, 500);
-    const ids = current.map(s => s.id).filter(id => id !== seriesId);
-    await this.client.post('/api/Collection/update-series', { id: collectionId, seriesIds: ids });
+  async removeSeriesFromCollection(collection: Collection, seriesId: number): Promise<void> {
+    await this.client.post('/api/Collection/update-series', {
+      tag: collection,
+      seriesIdsToRemove: [seriesId],
+    });
   }
 
   // ── Metadata — genres & tags ─────────────────────────────────────────────────
@@ -352,6 +345,28 @@ class KavitaAPI {
       return Array.isArray(response.data) ? response.data : [];
     } catch {
       return [];
+    }
+  }
+
+  async removeGenreFromAllSeries(genreId: number, onProgress?: (done: number, total: number) => void): Promise<void> {
+    const allSeries = await this.getSeriesByGenre(genreId, 0, 500);
+    for (let i = 0; i < allSeries.length; i++) {
+      const meta = await this.getSeriesMetadata(allSeries[i].id);
+      if (!meta) continue;
+      const updated = { ...meta, genres: meta.genres.filter(g => g.id !== genreId) };
+      await this.updateSeriesMetadata(updated);
+      onProgress?.(i + 1, allSeries.length);
+    }
+  }
+
+  async removeTagFromAllSeries(tagId: number, onProgress?: (done: number, total: number) => void): Promise<void> {
+    const allSeries = await this.getSeriesByTag(tagId, 0, 500);
+    for (let i = 0; i < allSeries.length; i++) {
+      const meta = await this.getSeriesMetadata(allSeries[i].id);
+      if (!meta) continue;
+      const updated = { ...meta, tags: meta.tags.filter(t => t.id !== tagId) };
+      await this.updateSeriesMetadata(updated);
+      onProgress?.(i + 1, allSeries.length);
     }
   }
 
@@ -413,9 +428,10 @@ class KavitaAPI {
   // ── Cover upload ─────────────────────────────────────────────────────────────
 
   async uploadSeriesCover(seriesId: number, base64DataUrl: string): Promise<void> {
+    // Strip data URL prefix — Kavita expects raw base64
     const url = base64DataUrl.startsWith('data:')
-      ? base64DataUrl
-      : `data:image/jpeg;base64,${base64DataUrl}`;
+      ? base64DataUrl.replace(/^data:[^;]+;base64,/, '')
+      : base64DataUrl;
     try {
       await this.client.post('/api/Upload/series', { id: seriesId, url });
     } catch (e: any) {

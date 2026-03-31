@@ -208,10 +208,10 @@ function CoverPickerModal({ visible, seriesId, seriesName, authorName, onClose, 
                 onChangeText={setSearchQuery}
                 placeholder="Book title / author…"
                 placeholderTextColor={Colors.textMuted}
-                onSubmitEditing={searchCovers}
+                onSubmitEditing={() => searchCovers()}
                 returnKeyType="search"
               />
-              <TouchableOpacity style={styles.searchBtn} onPress={searchCovers} disabled={searching} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.searchBtn} onPress={() => searchCovers()} disabled={searching} activeOpacity={0.8}>
                 {searching
                   ? <ActivityIndicator size="small" color={Colors.textOnAccent} />
                   : <Ionicons name="search" size={18} color={Colors.textOnAccent} />
@@ -535,6 +535,9 @@ export default function SeriesDetailScreen() {
   const [coverPickerVisible, setCoverPickerVisible] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [coverKey, setCoverKey] = useState(0); // bump to force cover re-fetch
+  const [coverError, setCoverError] = useState('');
+
+  useEffect(() => { setCoverError(''); }, [coverKey]);
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -598,9 +601,6 @@ export default function SeriesDetailScreen() {
   }
 
   const coverUrl = kavitaAPI.getSeriesCoverUrl(detail.id) + `&v=${coverKey}`;
-  const [coverError, setCoverError] = useState('');
-  useEffect(() => { setCoverError(''); }, [coverKey]);
-  console.log('[cover] URL:', coverUrl);
   const overallProgress = (() => {
     const totalPages = detail.volumes?.reduce((s, v) => s + v.pages, 0) ?? 0;
     const pagesRead = detail.volumes?.reduce((s, v) => s + v.pagesRead, 0) ?? 0;

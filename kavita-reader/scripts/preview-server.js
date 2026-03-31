@@ -85,6 +85,9 @@ function proxyRequest(req, res) {
       headers['pragma'] = 'no-cache';
       delete headers['etag'];
       delete headers['last-modified'];
+      console.log(`[image] ${proxyRes.statusCode} ${req.url}`);
+    } else {
+      console.log(`[api] ${req.method} ${proxyRes.statusCode} ${req.url}`);
     }
     res.writeHead(proxyRes.statusCode, headers);
     proxyRes.pipe(res);
@@ -144,7 +147,9 @@ function handleCoverProxy(req, res) {
       const totalKB = Math.round(Buffer.byteLength(dataUrl) / 1024);
       console.log(`[cover-proxy] fetched image: ${mimeSnip}… (${totalKB} KB)`);
 
-      const payload = JSON.stringify({ id: seriesId, url: dataUrl });
+      // Kavita expects raw base64, not a data URL
+      const rawBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
+      const payload = JSON.stringify({ id: seriesId, url: rawBase64 });
       const payloadKB = Math.round(Buffer.byteLength(payload) / 1024);
       console.log(`[cover-proxy] sending to Kavita: ${payloadKB} KB payload`);
 

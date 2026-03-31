@@ -90,7 +90,7 @@ export default function SeriesContextMenu({
       const inColls = new Set<number>();
       await Promise.all(
         colls.map(async (c) => {
-          const series = await kavitaAPI.getSeriesForCollection(c.id, 0, 500);
+          const series = await kavitaAPI.getSeriesForCollection(c.id);
           if (series.some(s => s.id === seriesId)) inColls.add(c.id);
         })
       );
@@ -127,10 +127,10 @@ export default function SeriesContextMenu({
       await Promise.all(
         allCollections.map(async (c) => {
           const wasIn = collectionsWithSeries.has(c.id);
-          const current = await kavitaAPI.getSeriesForCollection(c.id, 0, 500);
+          const current = await kavitaAPI.getSeriesForCollection(c.id);
           const isIn = current.some(s => s.id === seriesId);
           if (!isIn && wasIn) await kavitaAPI.addSeriesToCollection(c.id, seriesId!);
-          if (isIn && !wasIn) await kavitaAPI.removeSeriesFromCollection(c.id, seriesId!);
+          if (isIn && !wasIn) await kavitaAPI.removeSeriesFromCollection(c, seriesId!);
         })
       );
       setSaved(true);
