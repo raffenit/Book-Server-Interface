@@ -71,7 +71,9 @@ export default function LoginScreen() {
               placeholder="192.168.1.100:5000 or http://..."
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
+              autoComplete="off"
               autoCorrect={false}
+              spellCheck={false}
               keyboardType="url"
               editable={!proxyUrl}
               onFocus={() => setUrlFocused(true)}
@@ -91,7 +93,9 @@ export default function LoginScreen() {
               placeholder="Your Kavita API key"
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
+              autoComplete="off"
               autoCorrect={false}
+              spellCheck={false}
               secureTextEntry
               onFocus={() => setKeyFocused(true)}
               onBlur={() => setKeyFocused(false)}
