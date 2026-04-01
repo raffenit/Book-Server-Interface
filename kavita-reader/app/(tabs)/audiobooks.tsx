@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, Image, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { absAPI, ABSLibrary, ABSLibraryItem } from '../../services/audiobookshelfAPI';
 import { useAudioPlayer } from '../../contexts/AudioPlayerContext';
@@ -72,9 +72,24 @@ export default function AudiobooksScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    initialize();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const checkStatus = async () => {
+        await absAPI.initialize();
+        
+        if (!absAPI.hasCredentials()) {
+          setConnected(false);
+          setLoading(false);
+          return;
+        }
+
+        // Run the fetch!
+        initialize(); 
+      };
+
+      checkStatus();
+    }, []) // <--- EMPTY ARRAY IS THE LIFESAVER HERE
+  );
 
   async function initialize() {
     await absAPI.initialize();

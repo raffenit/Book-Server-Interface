@@ -518,13 +518,22 @@ class KavitaAPI {
 
   // ── Recently read ────────────────────────────────────────────────────────────
 
-  async getRecentlyRead(): Promise<any[]> {
+  async getOnDeckSeries(pageNumber = 1, pageSize = 20) {
     try {
-      const response = await this.client.post('/api/Series/recently-read', {
-        pageNumber: 0, pageSize: 20,
-      });
-      return response.data;
-    } catch {
+      // Notice this is a .post(), not a .get()
+      const res = await this.client.post('/api/Series/on-deck', 
+        {}, // Empty body (unless you are applying specific library filters)
+        {
+          params: {
+            pageNumber,
+            pageSize,
+            libraryId: 0 // 0 means "all libraries"
+          }
+        }
+      );
+      return res.data; 
+    } catch (error) {
+      console.error('Failed to fetch On Deck series:', error);
       return [];
     }
   }

@@ -150,7 +150,7 @@ export default function HomeScreen() {
       const [g, t, recent] = await Promise.all([
         kavitaAPI.getGenres(),
         kavitaAPI.getTags(),
-        kavitaAPI.getRecentlyRead(),
+        kavitaAPI.getOnDeckSeries(),
       ]);
       setGenres(g);
       setTags(t);

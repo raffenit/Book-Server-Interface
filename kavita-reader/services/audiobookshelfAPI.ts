@@ -79,6 +79,7 @@ class AudiobookshelfAPI {
   constructor() {
     this.client = axios.create({ timeout: 30000 });
     this.client.interceptors.request.use((config) => {
+      console.log("Interceptor firing! API Key is:", this.apiKey);
       if (this.apiKey) config.headers.Authorization = `Bearer ${this.apiKey}`;
       return config;
     });
@@ -87,7 +88,7 @@ class AudiobookshelfAPI {
   async initialize() {
     const url = (await storage.getItem(STORAGE_KEYS.SERVER_URL)) || '';
     const key = (await storage.getItem(STORAGE_KEYS.API_KEY)) || '';
-    if (url) this.setServer(url, key);
+    if (url && key) this.setServer(url, key);
   }
 
   private setServer(url: string, key: string) {
@@ -96,6 +97,17 @@ class AudiobookshelfAPI {
     this.serverUrl = clean;
     this.apiKey = key;
     this.client.defaults.baseURL = clean;
+  }
+
+  async loadCredentials() {
+    const storedUrl = await storage.getItem(STORAGE_KEYS.SERVER_URL);
+    const storedKey = await storage.getItem(STORAGE_KEYS.API_KEY);
+
+    if (storedUrl && storedKey) {
+      this.setServer(storedUrl, storedKey);
+      return true;
+    }
+    return false;
   }
 
   async saveCredentials(serverUrl: string, apiKey: string) {
@@ -117,6 +129,8 @@ class AudiobookshelfAPI {
   }
 
   getServerUrl(): string { return this.serverUrl; }
+
+  getApiKey(): string { return this.apiKey; }
 
   /** Ping the server — returns true if reachable with the given key */
   async ping(): Promise<boolean> {

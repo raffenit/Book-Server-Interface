@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
+import { Ionicons } from '@expo/vector-icons';;
 
 const proxyUrl =
   Platform.OS === 'web' && typeof window !== 'undefined'
@@ -22,6 +23,7 @@ export default function LoginScreen() {
   const { login } = useAuth();
   const [serverUrl, setServerUrl] = useState(proxyUrl ?? '');
   const [apiKey, setApiKey] = useState('');
+  const [isPasswordHidden, setIsPasswordHidden] = useState(true);
   const [loading, setLoading] = useState(false);
   const [urlFocused, setUrlFocused] = useState(false);
   const [keyFocused, setKeyFocused] = useState(false);
@@ -86,6 +88,7 @@ export default function LoginScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>API Key</Text>
+            
             <TextInput
               style={[styles.input, keyFocused && styles.inputFocused]}
               value={apiKey}
@@ -96,11 +99,24 @@ export default function LoginScreen() {
               autoComplete="off"
               autoCorrect={false}
               spellCheck={false}
-              secureTextEntry
+              secureTextEntry={isPasswordHidden}
               onFocus={() => setKeyFocused(true)}
               onBlur={() => setKeyFocused(false)}
             />
+            {/* The Show/Hide Button */}
+            <TouchableOpacity 
+              style={styles.iconButton} 
+              onPress={() => setIsPasswordHidden(!isPasswordHidden)}
+            >
+              <Ionicons 
+                name={isPasswordHidden ? 'eye-off' : 'eye'} 
+                size={24} 
+                color="gray" 
+              />
+            </TouchableOpacity>
+            
             <Text style={styles.hint}>Found in Kavita → User Settings → Security</Text>
+
           </View>
 
           {error !== '' && (
@@ -194,6 +210,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   input: {
+    flexDirection: 'row',
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -203,8 +220,12 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   inputFocused: {
+    flex: 1,
     borderColor: Colors.accent,
     backgroundColor: Colors.surfaceElevated,
+  },
+  iconButton: {
+    padding: 10, // Gives the button a larger tap target
   },
   hint: {
     fontSize: Typography.xs,

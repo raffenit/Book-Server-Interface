@@ -182,7 +182,7 @@ function ABSConfigModal({ visible, onClose }: { visible: boolean; onClose: () =>
   useEffect(() => {
     if (visible) {
       setUrl(absAPI.getServerUrl());
-      setKey('');
+      setKey(absAPI.getApiKey() || '');
       setStatus('');
     }
   }, [visible]);

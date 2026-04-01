@@ -317,7 +317,7 @@ function EditMetadataModal({ visible, seriesId, seriesName, onClose, onSaved }: 
       const inCollections = new Set<number>();
       await Promise.all(
         colls.map(async (c) => {
-          const series = await kavitaAPI.getSeriesForCollection(c.id, 0, 500);
+          const series = await kavitaAPI.getSeriesForCollection(c.id);
           if (series.some(s => s.id === seriesId)) inCollections.add(c.id);
         })
       );
@@ -361,7 +361,7 @@ function EditMetadataModal({ visible, seriesId, seriesName, onClose, onSaved }: 
       await kavitaAPI.updateSeriesMetadata({ ...metadata, summary: editSummary });
       await Promise.all(
         allCollections.map(async (c) => {
-          const wasIn = (await kavitaAPI.getSeriesForCollection(c.id, 0, 1)).some(s => s.id === seriesId);
+          const wasIn = (await kavitaAPI.getSeriesForCollection(c.id)).some(s => s.id === seriesId);
           const shouldBeIn = collectionsWithSeries.has(c.id);
           if (!wasIn && shouldBeIn) await kavitaAPI.addSeriesToCollection(c.id, seriesId);
           if (wasIn && !shouldBeIn) await kavitaAPI.removeSeriesFromCollection(c.id, seriesId);
