@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,12 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { kavitaAPI } from '../../services/kavitaAPI';
+import { absAPI } from '../../services/audiobookshelfAPI';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -54,25 +57,324 @@ function SettingRow({ icon, label, value, onPress, destructive, loading, statusT
   );
 }
 
+// ── Kavita Configuration Modal ────────────────────────────────────────────────
+
+function KavitaConfigModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { login, logout, serverUrl } = useAuth();
+  const [url, setUrl] = useState('');
+  const [key, setKey] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [status, setStatus] = useState('');
+  const [statusOk, setStatusOk] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setUrl(serverUrl);
+      setKey('');
+      setStatus('');
+    }
+  }, [visible, serverUrl]);
+
+  async function handleSave() {
+    if (!url.trim() || !key.trim()) {
+      setStatus('Server URL and API key are required.');
+      setStatusOk(false);
+      return;
+    }
+    setTesting(true);
+    setStatus('');
+    const result = await login(url.trim(), key.trim());
+    setTesting(false);
+    if (result.success) {
+      setStatusOk(true);
+      setStatus('Connected successfully!');
+      setTimeout(onClose, 800);
+    } else {
+      setStatusOk(false);
+      setStatus(result.error ?? 'Connection failed.');
+    }
+  }
+
+  function handleDisconnect() {
+    Alert.alert(
+      'Disconnect',
+      'This will remove your server connection. You can reconnect at any time.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: () => { logout(); onClose(); } },
+      ]
+    );
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={absStyles.sheet}>
+        <View style={absStyles.sheetHeader}>
+          <Text style={absStyles.sheetTitle}>Kavita Server</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={8}>
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={absStyles.field}>
+          <Text style={absStyles.label}>Server URL</Text>
+          <TextInput
+            style={absStyles.input}
+            value={url}
+            onChangeText={setUrl}
+            placeholder="192.168.1.100:5000 or http://..."
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+        </View>
+        <View style={absStyles.field}>
+          <Text style={absStyles.label}>API Key</Text>
+          <TextInput
+            style={absStyles.input}
+            value={key}
+            onChangeText={setKey}
+            placeholder="Your Kavita API key"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          <Text style={absStyles.hint}>Found in Kavita → User Settings → Security</Text>
+        </View>
+
+        {status ? (
+          <Text style={[absStyles.status, statusOk ? absStyles.statusOk : absStyles.statusErr]}>
+            {status}
+          </Text>
+        ) : null}
+
+        <TouchableOpacity
+          style={[absStyles.saveBtn, testing && absStyles.saveBtnDisabled]}
+          onPress={handleSave}
+          disabled={testing}
+        >
+          {testing ? (
+            <ActivityIndicator color={Colors.textOnAccent} />
+          ) : (
+            <Text style={absStyles.saveBtnText}>Save &amp; Test</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity style={absStyles.clearBtn} onPress={handleDisconnect}>
+          <Text style={[absStyles.clearBtnText, { color: Colors.error }]}>Disconnect Server</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
+// ── ABS Configuration Modal ───────────────────────────────────────────────────
+
+function ABSConfigModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [url, setUrl] = useState('');
+  const [key, setKey] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [status, setStatus] = useState('');
+  const [statusOk, setStatusOk] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setUrl(absAPI.getServerUrl());
+      setKey('');
+      setStatus('');
+    }
+  }, [visible]);
+
+  async function handleSave() {
+    if (!url.trim() || !key.trim()) {
+      setStatus('Server URL and API key are required.');
+      setStatusOk(false);
+      return;
+    }
+    setTesting(true);
+    setStatus('');
+    try {
+      await absAPI.saveCredentials(url.trim(), key.trim());
+      const ok = await absAPI.ping();
+      if (ok) {
+        setStatusOk(true);
+        setStatus('Connected successfully!');
+        setTimeout(onClose, 800);
+      } else {
+        setStatusOk(false);
+        setStatus('Could not reach server — check URL and API key.');
+      }
+    } catch (e: any) {
+      setStatusOk(false);
+      setStatus(`Error: ${e?.message ?? 'unknown'}`);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function handleClear() {
+    await absAPI.clearCredentials();
+    onClose();
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={absStyles.sheet}>
+        <View style={absStyles.sheetHeader}>
+          <Text style={absStyles.sheetTitle}>Audiobookshelf</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={8}>
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={absStyles.field}>
+          <Text style={absStyles.label}>Server URL</Text>
+          <TextInput
+            style={absStyles.input}
+            value={url}
+            onChangeText={setUrl}
+            placeholder="http://192.168.1.x:13378"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+        </View>
+        <View style={absStyles.field}>
+          <Text style={absStyles.label}>API Key</Text>
+          <TextInput
+            style={absStyles.input}
+            value={key}
+            onChangeText={setKey}
+            placeholder="Your ABS API token"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          <Text style={absStyles.hint}>Found in ABS → Settings → Users → your user → API Token</Text>
+        </View>
+
+        {status ? (
+          <Text style={[absStyles.status, statusOk ? absStyles.statusOk : absStyles.statusErr]}>
+            {status}
+          </Text>
+        ) : null}
+
+        <TouchableOpacity
+          style={[absStyles.saveBtn, testing && absStyles.saveBtnDisabled]}
+          onPress={handleSave}
+          disabled={testing}
+        >
+          {testing ? (
+            <ActivityIndicator color={Colors.textOnAccent} />
+          ) : (
+            <Text style={absStyles.saveBtnText}>Save &amp; Test</Text>
+          )}
+        </TouchableOpacity>
+
+        {absAPI.hasCredentials() && (
+          <TouchableOpacity style={absStyles.clearBtn} onPress={handleClear}>
+            <Text style={absStyles.clearBtnText}>Disconnect Audiobookshelf</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+const absStyles = StyleSheet.create({
+  sheet: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    padding: Spacing.xl,
+    paddingTop: Spacing.xxxl,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xxl,
+  },
+  sheetTitle: {
+    fontSize: Typography.xl,
+    fontWeight: Typography.bold,
+    color: Colors.textPrimary,
+    fontFamily: 'Georgia',
+  },
+  field: {
+    marginBottom: Spacing.lg,
+  },
+  label: {
+    fontSize: Typography.sm,
+    fontWeight: Typography.semibold,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: Spacing.xs,
+  },
+  input: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: Spacing.base,
+    fontSize: Typography.base,
+    color: Colors.textPrimary,
+  },
+  hint: {
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  status: {
+    fontSize: Typography.sm,
+    marginBottom: Spacing.md,
+  },
+  statusOk: { color: Colors.success },
+  statusErr: { color: Colors.error },
+  saveBtn: {
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.md,
+    padding: Spacing.base,
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: {
+    fontSize: Typography.md,
+    fontWeight: Typography.bold,
+    color: Colors.textOnAccent,
+  },
+  clearBtn: {
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  clearBtnText: {
+    fontSize: Typography.base,
+    color: Colors.error,
+  },
+});
+
+// ── Main Settings Screen ──────────────────────────────────────────────────────
+
 export default function SettingsScreen() {
-  const { logout, serverUrl } = useAuth();
+  const { serverUrl } = useAuth();
+  const [kavitaModalVisible, setKavitaModalVisible] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanStatus, setScanStatus] = useState('');
   const [scanOk, setScanOk] = useState(false);
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const [analyzeStatus, setAnalyzeStatus] = useState('');
   const [analyzeOk, setAnalyzeOk] = useState(false);
+  const [absModalVisible, setAbsModalVisible] = useState(false);
+  const [absConnected, setAbsConnected] = useState(false);
 
-  function handleLogout() {
-    Alert.alert(
-      'Disconnect',
-      'This will remove your server connection. You can reconnect at any time.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Disconnect', style: 'destructive', onPress: logout },
-      ]
-    );
-  }
+  useEffect(() => {
+    absAPI.initialize().then(() => setAbsConnected(absAPI.hasCredentials()));
+  }, []);
 
   async function handleScanAll() {
     setScanLoading(true);
@@ -117,14 +419,17 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Settings</Text>
       </View>
 
-      {/* Server section */}
+      {/* Kavita section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Server</Text>
+        <Text style={styles.sectionTitle}>Kavita</Text>
         <View style={styles.card}>
           <SettingRow
             icon="server-outline"
-            label="Connected to"
-            value={displayUrl}
+            label="Kavita Server"
+            value="Connected"
+            onPress={() => setKavitaModalVisible(true)}
+            statusText={displayUrl}
+            statusOk
           />
         </View>
       </View>
@@ -157,6 +462,21 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* Audiobookshelf section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Audiobookshelf</Text>
+        <View style={styles.card}>
+          <SettingRow
+            icon="headset-outline"
+            label="Audiobookshelf Server"
+            value={absConnected ? 'Connected' : 'Not configured'}
+            onPress={() => setAbsModalVisible(true)}
+            statusText={absConnected ? absAPI.getServerUrl().replace(/^https?:\/\//, '') : undefined}
+            statusOk={absConnected}
+          />
+        </View>
+      </View>
+
       {/* About section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About</Text>
@@ -175,23 +495,24 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Account section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account</Text>
-        <View style={styles.card}>
-          <SettingRow
-            icon="log-out-outline"
-            label="Disconnect Server"
-            onPress={handleLogout}
-            destructive
-          />
-        </View>
-      </View>
 
       <Text style={styles.footer}>
         Kavita Reader is an unofficial client for self-hosted Kavita servers.
       </Text>
     </ScrollView>
+
+    <KavitaConfigModal
+      visible={kavitaModalVisible}
+      onClose={() => setKavitaModalVisible(false)}
+    />
+
+    <ABSConfigModal
+      visible={absModalVisible}
+      onClose={() => {
+        setAbsModalVisible(false);
+        setAbsConnected(absAPI.hasCredentials());
+      }}
+    />
   );
 }
 
