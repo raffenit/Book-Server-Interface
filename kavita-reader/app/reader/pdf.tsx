@@ -49,7 +49,6 @@ export default function PDFReaderScreen() {
     setCurrentPage(page);
     kavitaAPI.saveReadingProgress(
       chapterId, page,
-      Number(params.seriesId), Number(params.volumeId)
     );
   }
 

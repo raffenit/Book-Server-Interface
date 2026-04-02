@@ -66,6 +66,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     return () => { cleanupSound(); };
   }, []);
 
+
+
   async function cleanupSound() {
     stopSyncInterval();
     if (soundRef.current) {
@@ -89,7 +91,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         const status = await soundRef.current.getStatusAsync();
         if (!status.isLoaded) return;
         const positionSec = (status.positionMillis ?? 0) / 1000;
-        await absAPI.syncProgress(session.id, positionSec, session.duration);
+        await absAPI.saveAudioProgress(session.id, positionSec, session.duration);
       } catch {}
     }, 30000); // sync every 30s
   }
@@ -188,23 +190,31 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const seekSession = useCallback(async (absSeconds: number) => {
-    if (!nowPlaying) return;
+    // 1. Guard against bad math
+    if (!nowPlaying || !Number.isFinite(absSeconds)) return;
+
     const { tracks } = nowPlaying;
-    // Find which track this absolute time falls in
     for (let i = 0; i < tracks.length; i++) {
       const trackEnd = tracks[i].startOffset + tracks[i].duration;
+      
       if (absSeconds < trackEnd || i === tracks.length - 1) {
-        const offsetWithinTrack = absSeconds - tracks[i].startOffset;
+        const offsetWithinTrack = Math.max(0, absSeconds - tracks[i].startOffset);
+        
         if (i === nowPlaying.trackIndex) {
-          await seek(offsetWithinTrack);
+          // 2. Use setPositionAsync for internal seeks (Smoother for PWA)
+          await seek(offsetWithinTrack); 
         } else {
+          // 3. Only reload if jumping to a different file
           setNowPlaying(prev => prev ? { ...prev, trackIndex: i } : prev);
           await loadTrack(nowPlaying, i, offsetWithinTrack);
         }
+        
+        // 4. Sync to Audiobookshelf (ABS)
+        absAPI.saveAudioProgress(nowPlaying.session.id, absSeconds, nowPlaying.session.duration);
         return;
       }
     }
-  }, [nowPlaying, seek]);
+  }, [nowPlaying, seek, loadTrack]);
 
   const skipForward = useCallback(async (seconds = 30) => {
     if (!soundRef.current || !nowPlaying) return;
@@ -241,6 +251,20 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     setCurrentTime(0);
     setTotalTime(0);
   }, [nowPlaying]);
+
+  useEffect(() => {
+    if ('mediaSession' in navigator && nowPlaying) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: nowPlaying.item.media.metadata.title,
+        artist: nowPlaying.item.media.metadata.authorName || 'Unknown Author',
+        artwork: [{ src: absAPI.getCoverUrl(nowPlaying.item.id), sizes: '512x512', type: 'image/jpeg' }]
+      });
+
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined) seekSession(details.seekTime);
+      });
+    }
+  }, [nowPlaying, seekSession]);
 
   return (
     <AudioPlayerContext.Provider value={{

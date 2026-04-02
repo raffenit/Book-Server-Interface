@@ -174,16 +174,15 @@ class AudiobookshelfAPI {
   }
 
   /** Report progress back to ABS */
-  async syncProgress(sessionId: string, currentTime: number, duration: number) {
-    try {
-      await this.client.post(`/api/session/${sessionId}/sync`, {
-        currentTime,
-        duration,
-        timeListened: 0,
-      });
-    } catch {
-      // non-fatal
-    }
+  async saveAudioProgress(itemId: string, currentTime: number, duration: number): Promise<void> {
+    // ABS uses /api/items/{id}/progress
+    // Note: ABS IDs are usually UUID strings, not integers!
+    await this.client.post(`/api/items/${itemId}/progress`, {
+      currentTime,
+      duration,
+      progress: currentTime / duration, // ABS likes the percentage too
+      lastUpdate: Date.now()
+    });
   }
 
   /** Close playback session */

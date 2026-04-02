@@ -45,19 +45,18 @@ function formatLabel(fmt: number): string {
 }
 
 /** Flatten all volumes into a sorted chapter list. */
-function flatChapters(volumes: Volume[]): { chapter: Chapter; volume: Volume }[] {
+function flatChapters(volumes: Volume[]) {
   const result: { chapter: Chapter; volume: Volume }[] = [];
-  for (const vol of [...volumes].sort((a, b) => a.number - b.number)) {
+  for (const vol of volumes) {
     for (const ch of vol.chapters ?? []) {
+      // Check for the ID specifically
+      if (!ch.id) {
+        console.error("FOUND CHAPTER WITH MISSING ID:", ch.title, "in Volume", vol.id);
+      }
       result.push({ chapter: ch, volume: vol });
     }
   }
-  return result.sort((a, b) => {
-    if (a.volume.number !== b.volume.number) return a.volume.number - b.volume.number;
-    const na = parseFloat(a.chapter.number) || 0;
-    const nb = parseFloat(b.chapter.number) || 0;
-    return na - nb;
-  });
+  return result;
 }
 
 /** Pick first unfinished chapter, or last one if all done. */
@@ -364,7 +363,9 @@ function EditMetadataModal({ visible, seriesId, seriesName, onClose, onSaved }: 
           const wasIn = (await kavitaAPI.getSeriesForCollection(c.id)).some(s => s.id === seriesId);
           const shouldBeIn = collectionsWithSeries.has(c.id);
           if (!wasIn && shouldBeIn) await kavitaAPI.addSeriesToCollection(c.id, seriesId);
-          if (wasIn && !shouldBeIn) await kavitaAPI.removeSeriesFromCollection(c.id, seriesId);
+          if (wasIn && !shouldBeIn) {
+            await kavitaAPI.removeSeriesFromCollection(c, seriesId);
+          }
         })
       );
       onSaved();
@@ -575,11 +576,18 @@ export default function SeriesDetailScreen() {
     }
   }
 
+  // Add the '?' after detail
+  const resume = detail?.volumes ? pickResumeChapter(detail.volumes) : null;
+
   function handleRead() {
-    if (!detail?.volumes?.length) return;
-    const resume = pickResumeChapter(detail.volumes);
-    if (resume) openChapter(resume.chapter, resume.volume);
+  // Guard clause: if detail or volumes is null, stop here
+  if (!detail?.volumes) return; 
+
+  const resume = pickResumeChapter(detail.volumes);
+  if (resume) {
+    openChapter(resume.chapter, resume.volume);
   }
+}
 
   if (loading) {
     return (

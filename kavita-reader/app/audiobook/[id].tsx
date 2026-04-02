@@ -18,38 +18,52 @@ function formatTime(seconds: number): string {
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-// ── Tap-to-seek bar (no extra deps) ───────────────────────────────────────────
-function SeekBar({ current, duration, onSeek }: {
-  current: number; duration: number; onSeek: (seconds: number) => void;
+// ── Tap-to-Seek Slider ───────────────────────────────────────────
+import Slider from '@react-native-community/slider';
+
+export function SeekBar({ current, duration, onSeek }: { 
+  current: number; duration: number; onSeek: (seconds: number) => void; 
 }) {
-  const [width, setWidth] = useState(0);
-  const progress = duration > 0 ? Math.min(current / duration, 1) : 0;
+  // Local state to make the "scrub" feel smooth without jumping back 
+  // to the server's last known position immediately.
+  const [isSliding, setIsSliding] = useState(false);
+  const [slidingValue, setSlidingValue] = useState(0);
 
-  function handleLayout(e: LayoutChangeEvent) {
-    setWidth(e.nativeEvent.layout.width);
-  }
-
-  function handlePress(e: any) {
-    if (!width || !duration) return;
-    const x = e.nativeEvent.locationX;
-    const ratio = Math.max(0, Math.min(x / width, 1));
-    onSeek(ratio * duration);
-  }
+  // Use local sliding value if dragging, otherwise use the 'current' prop from the player
+  const displayTime = isSliding ? slidingValue : current;
 
   return (
     <View style={styles.seekerBlock}>
-      <TouchableOpacity
-        onLayout={handleLayout}
-        onPress={handlePress}
-        activeOpacity={1}
-        style={styles.seekTrack}
-      >
-        <View style={[styles.seekFill, { width: `${progress * 100}%` as any }]} />
-        <View style={[styles.seekThumb, { left: `${progress * 100}%` as any }]} />
-      </TouchableOpacity>
+      <Slider
+        style={{ width: '100%', height: 40 }}
+        minimumValue={0}
+        maximumValue={duration > 0 ? duration : 1} // Avoid 0/NaN crashes
+        value={current}
+        
+        // 1. While sliding: Only update the local UI (time text)
+        onValueChange={(value) => {
+          setIsSliding(true);
+          setSlidingValue(value);
+        }}
+        
+        // 2. When released: Trigger the expensive API sync and Seek
+        onSlidingComplete={(value) => {
+          setIsSliding(false);
+          if (Number.isFinite(value)) {
+            onSeek(value);
+          }
+        }}
+        
+        minimumTrackTintColor="#FFFFFF"
+        maximumTrackTintColor="#444444"
+        thumbTintColor="#FFFFFF"
+      />
+
       <View style={styles.timeRow}>
-        <Text style={styles.timeText}>{formatTime(current)}</Text>
-        <Text style={styles.timeText}>-{formatTime(Math.max(0, duration - current))}</Text>
+        <Text style={styles.timeText}>{formatTime(displayTime)}</Text>
+        <Text style={styles.timeText}>
+          -{formatTime(Math.max(0, duration - displayTime))}
+        </Text>
       </View>
     </View>
   );

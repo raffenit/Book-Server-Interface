@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { kavitaAPI } from '../../services/kavitaAPI';
+import { kavitaAPI, KavitaBookInfo } from '../../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -58,10 +58,13 @@ export default function EpubReaderScreen() {
   const [rawHtml, setRawHtml] = useState('');
   const [theme, setTheme] = useState<ThemeName>('dark');
 
+  // Replace your baseHref logic with this:
+  const kavitaProxy = kavitaAPI.getServerUrl(); 
+
   const baseHref =
     Platform.OS === 'web' && typeof window !== 'undefined'
-      ? window.location.origin + '/'
-      : '/';
+      ? `${kavitaProxy}/api/Reader/image-proxy/${chapterId}/` 
+      : `${kavitaProxy}/api/Reader/image-proxy/${chapterId}/`;
 
   // Rebuild page HTML whenever raw content or theme changes (no extra network call on theme switch)
   const pageHtml = rawHtml ? buildPageHtml(rawHtml, THEMES[theme], baseHref) : '';
@@ -75,7 +78,6 @@ export default function EpubReaderScreen() {
       setCurrentPage(page);
       kavitaAPI.saveReadingProgress(
         chapterId, page,
-        Number(params.seriesId), Number(params.volumeId)
       );
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load page');
@@ -87,9 +89,17 @@ export default function EpubReaderScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const info = await kavitaAPI.getBookInfo(chapterId);
+        const info: KavitaBookInfo = await kavitaAPI.getBookInfo(chapterId);
         setTotalPages(info.pages ?? 0);
-        await loadPage(0);
+
+        // Check if lastReadPage is a valid number (including 0)
+        // If it's undefined or null, default to 0
+        const startPage = (info.lastReadPage !== undefined && info.lastReadPage !== null)
+          ? info.lastReadPage 
+          : 0;
+
+        console.log(`Resuming at page: ${startPage}`);
+        await loadPage(startPage);
       } catch (e: any) {
         setError(e?.message ?? 'Failed to load book');
         setLoading(false);

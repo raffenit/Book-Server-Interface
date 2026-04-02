@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import { Platform } from 'react-native';
 import { storage } from './storage';
 
@@ -15,6 +15,15 @@ const STORAGE_KEYS = {
   API_KEY: 'kavita_api_key',
   JWT_TOKEN: 'kavita_jwt_token',
 };
+
+export interface KavitaBookInfo {
+  pages: number;
+  bookTitle?: string;
+  lastReadPage?: number; 
+  chapterId?: number;
+  // This allows other properties without errors
+  [key: string]: any; 
+}
 
 export interface Library {
   id: number;
@@ -390,18 +399,19 @@ class KavitaAPI {
 
   // ── Book (EPUB) reader ───────────────────────────────────────────────────────
 
-  async getBookInfo(chapterId: number): Promise<{ pages: number; bookTitle?: string }> {
-    const response = await this.client.get(`/api/book/${chapterId}/book-info`);
-    return response.data;
-  }
+  async getBookInfo(chapterId: number): Promise<KavitaBookInfo> {
+  // Use the path-based /api/Book/ endpoint
+  const response = await this.client.get(`/api/Book/${chapterId}/book-info`);
+  return response.data;
+}
 
-  async getBookPage(chapterId: number, page: number): Promise<string> {
-    const response = await this.client.get(`/api/book/${chapterId}/book-page`, {
-      params: { page },
-      responseType: 'text',
-    });
-    return response.data;
-  }
+async getBookPage(chapterId: number, page: number): Promise<string> {
+  // Update this to match the path-based style as well
+  const response = await this.client.get(`/api/Book/${chapterId}/book-page/${page}`, {
+    responseType: 'text',
+  });
+  return response.data;
+}
 
   // ── Reader ──────────────────────────────────────────────────────────────────
 
@@ -416,15 +426,24 @@ class KavitaAPI {
 
   // ── Reading progress ─────────────────────────────────────────────────────────
 
-  async saveReadingProgress(chapterId: number, page: number, seriesId: number, volumeId: number) {
-    try {
-      await this.client.post('/api/Reader/progress', {
-        chapterId, pageNum: page, seriesId, volumeId,
-      });
-    } catch (e) {
-      console.error('Failed to save reading progress', e);
+async saveReadingProgress(chapterId: number, page: number) {
+  try {
+    await this.client.post('/api/Reader/progress', {
+      chapterId: Number(chapterId), 
+      page: Number(page)
+    });
+  } catch (err) {
+    const axiosError = err as AxiosError;
+    
+    if (axiosError.response) {
+      // This is the golden ticket—the actual reason Kavita said "No"
+      console.error('Kavita Response Data:', axiosError.response.data);
+      console.error('Kavita Status:', axiosError.response.status);
+    } else {
+      console.error('Failed to save reading progress', err);
     }
   }
+}
 
   // ── File health ──────────────────────────────────────────────────────────────
 

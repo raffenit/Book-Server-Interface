@@ -202,8 +202,6 @@ export default function ImageReaderScreen() {
           kavitaAPI.saveReadingProgress(
             chapterId,
             data.page,
-            Number(params.seriesId),
-            Number(params.volumeId)
           );
           break;
         case 'tap':
