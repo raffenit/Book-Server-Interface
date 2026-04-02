@@ -28,15 +28,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function initializeAuth() {
     try {
+      // 1. Let the API service load its settings (prioritizing .env now)
       await kavitaAPI.initialize();
+      
+      // 2. Sync the Context state with whatever the API service settled on
+      const currentUrl = kavitaAPI.getServerUrl();
+      if (currentUrl) {
+        setServerUrl(currentUrl);
+      }
+
       if (kavitaAPI.hasCredentials()) {
-        try {
-          const success = await kavitaAPI.login();
-          setIsAuthenticated(success);
-          if (success) setServerUrl(kavitaAPI.getServerUrl());
-        } catch {
-          setIsAuthenticated(false);
-        }
+        const success = await kavitaAPI.login();
+        setIsAuthenticated(success);
       }
     } catch (e) {
       console.error('Auth init failed', e);

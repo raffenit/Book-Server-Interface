@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { kavitaAPI } from '../../services/kavitaAPI';
+import { kavitaAPI, ChapterInfo } from '../../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -20,6 +20,7 @@ export default function ImageReaderScreen() {
     title: string;
     seriesId: string;
     volumeId: string;
+    libraryId: string; // Add this
   }>();
 
   const [showHeader, setShowHeader] = useState(true);
@@ -28,7 +29,23 @@ export default function ImageReaderScreen() {
   const [totalPages, setTotalPages] = useState(0);
   const webViewRef = useRef<WebView>(null);
 
+  // Convert to numbers for the API calls
   const chapterId = Number(params.chapterId);
+  const seriesId = Number(params.seriesId);
+  const volumeId = Number(params.volumeId);
+  const libraryId = Number(params.libraryId);
+  
+  const [chapterInfo, setChapterInfo] = useState<ChapterInfo | null>(null);
+
+  // Fetch info once to populate the "suitcase"
+  useEffect(() => {
+    (async () => {
+      const info = await kavitaAPI.getChapterInfo(chapterId);
+      setChapterInfo(info);
+      if (info) setTotalPages(info.pages);
+    })();
+  }, [chapterId]);
+
   const token = kavitaAPI.getToken();
   // In proxy mode serverUrl is '' so these become relative URLs, proxied to Kavita
   const serverUrl = kavitaAPI.getServerUrl();
@@ -84,26 +101,34 @@ export default function ImageReaderScreen() {
     <img id="page-img" />
   </div>
   <script>
+    // These are now hardcoded into the string that the WebView loads
     const TOKEN = '${token}';
     const SERVER = '${serverUrl}';
     const CHAPTER_ID = ${chapterId};
+    const API_KEY = '${kavitaAPI.getApiKey()}'; 
+
+    async function fetchPage(n) {
+      if (cache[n]) return cache[n];
+      
+      // Now these constants will be recognized because they were 
+      // 'baked in' to the string by the backticks above.
+      const url = SERVER + '/api/Reader/image?bookId=' + CHAPTER_ID + '&pageNum=' + n + '&apiKey=' + API_KEY;
+      
+      const resp = await fetch(url, { 
+        headers: { 'Authorization': 'Bearer ' + TOKEN } 
+      });
+      
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const blob = await resp.blob();
+      return URL.createObjectURL(blob);
+    }
+    
     let currentPage = 0;
     let totalPages = 0;
     const cache = {};
 
     function notify(data) {
       window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(data));
-    }
-
-    async function fetchPage(n) {
-      if (cache[n]) return cache[n];
-      const url = SERVER + '/api/Reader/page?chapterId=' + CHAPTER_ID + '&page=' + n + '&extractPdf=false';
-      const resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + TOKEN } });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const blob = await resp.blob();
-      const objUrl = URL.createObjectURL(blob);
-      cache[n] = objUrl;
-      return objUrl;
     }
 
     async function showPage(n) {
@@ -200,7 +225,7 @@ export default function ImageReaderScreen() {
         case 'page':
           setCurrentPage(data.page);
           kavitaAPI.saveReadingProgress(
-            chapterId,
+            data.chapterID,
             data.page,
           );
           break;

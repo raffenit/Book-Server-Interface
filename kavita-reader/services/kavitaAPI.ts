@@ -21,6 +21,7 @@ export interface KavitaBookInfo {
   bookTitle?: string;
   lastReadPage?: number; 
   chapterId?: number;
+  
   // This allows other properties without errors
   [key: string]: any; 
 }
@@ -139,7 +140,9 @@ export interface ChapterInfo {
   volumeId: number;
   libraryId: number;
   pages: number;
-  fileName: string;
+  lastReadPage?: number; // Add this here
+  title?: string;
+  fileName?: string;
   isSpecial: boolean;
 }
 
@@ -171,36 +174,59 @@ class KavitaAPI {
   private jwtToken: string = '';
 
   constructor() {
-    this.client = axios.create({ timeout: 30000 });
+    // 1. Pull the URL from the environment variable as the "Source of Truth"
+    const envUrl = process.env.EXPO_PUBLIC_KAVITA_URL || '';
+    
+    this.client = axios.create({ 
+      baseURL: envUrl, // Set it immediately in the constructor
+      timeout: 30000 
+    });
+
     this.client.interceptors.request.use((config) => {
-      if (this.jwtToken) config.headers.Authorization = `Bearer ${this.jwtToken}`;
+      // 2. Log the request URL in dev mode to catch port-swapping bugs early
+      if (__DEV__) {
+        console.log(`Kavita Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+      }
+      
+      if (this.jwtToken) {
+        config.headers.Authorization = `Bearer ${this.jwtToken}`;
+      }
       return config;
     });
   }
 
   async initialize() {
     try {
-      const storedUrl = (await storage.getItem(STORAGE_KEYS.SERVER_URL)) || '';
-      this.apiKey = (await storage.getItem(STORAGE_KEYS.API_KEY)) || '';
-      this.jwtToken = (await storage.getItem(STORAGE_KEYS.JWT_TOKEN)) || '';
-      if (isProxyMode()) {
-        this.serverUrl = '';
-        this.client.defaults.baseURL = '';
-      } else if (storedUrl) {
-        let cleanUrl = storedUrl.replace(/\/$/, '');
-        if (!/^https?:\/\//i.test(cleanUrl)) cleanUrl = 'http://' + cleanUrl;
-        this.serverUrl = cleanUrl;
-        this.client.defaults.baseURL = cleanUrl;
-        await storage.setItem(STORAGE_KEYS.SERVER_URL, cleanUrl);
+      // 3. Fallback to Env if storage is empty
+      const storedUrl = await storage.getItem(STORAGE_KEYS.SERVER_URL);
+      const storedKey = await storage.getItem(STORAGE_KEYS.API_KEY);
+      const defaultUrl = process.env.EXPO_PUBLIC_KAVITA_URL || '';
+
+      const finalUrl = storedUrl || defaultUrl;
+
+      if (finalUrl && storedKey) {
+        this.setServer(finalUrl, storedKey);
       }
     } catch (e) {
-      console.error('Failed to initialize KavitaAPI from storage', e);
+      console.error('Failed to initialize KavitaAPI', e);
     }
   }
 
+  private setServer(url: string, key: string) {
+    let clean = url.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(clean)) clean = 'http://' + clean;
+    
+    this.serverUrl = clean;
+    this.apiKey = key;
+    this.client.defaults.baseURL = clean;
+  }
+
   async saveCredentials(serverUrl: string, apiKey: string) {
-    this.apiKey = apiKey;
+    this.setServer(serverUrl, apiKey);
+    await storage.setItem(STORAGE_KEYS.SERVER_URL, this.serverUrl);
     await storage.setItem(STORAGE_KEYS.API_KEY, apiKey);
+    this.apiKey = apiKey;
+
     if (isProxyMode()) {
       this.serverUrl = '';
       this.client.defaults.baseURL = '';
@@ -211,6 +237,25 @@ class KavitaAPI {
     this.serverUrl = cleanUrl;
     this.client.defaults.baseURL = cleanUrl;
     await storage.setItem(STORAGE_KEYS.SERVER_URL, cleanUrl);
+  }
+
+  async loadCredentials() {
+    const storedUrl = await storage.getItem(STORAGE_KEYS.SERVER_URL);
+    const storedKey = await storage.getItem(STORAGE_KEYS.API_KEY);
+
+    if (storedUrl && storedKey) {
+      this.setServer(storedUrl, storedKey);
+      return true;
+    }
+    return false;
+  }
+
+  async clearCredentials() {
+    this.serverUrl = '';
+    this.apiKey = '';
+    this.client.defaults.baseURL = '';
+    await storage.deleteItem(STORAGE_KEYS.SERVER_URL);
+    await storage.deleteItem(STORAGE_KEYS.API_KEY);
   }
 
   async login(): Promise<boolean> {
@@ -397,50 +442,58 @@ class KavitaAPI {
     return response.data;
   }
 
-  // ── Book (EPUB) reader ───────────────────────────────────────────────────────
+// ── Book (EPUB) reader ───────────────────────────────────────────────────────
 
-  async getBookInfo(chapterId: number): Promise<KavitaBookInfo> {
-  // Use the path-based /api/Book/ endpoint
-  const response = await this.client.get(`/api/Book/${chapterId}/book-info`);
+async getBookInfo(chapterId: number): Promise<KavitaBookInfo> {
+  // Added the apiKey parameter to the end of the URL string
+  const key = this.apiKey; 
+  const url = `/api/Reader/image?bookId=${chapterId}&pageNum=0&apiKey=${key}`;
+  const response = await this.client.get(url);
   return response.data;
 }
 
 async getBookPage(chapterId: number, page: number): Promise<string> {
-  // Update this to match the path-based style as well
-  const response = await this.client.get(`/api/Book/${chapterId}/book-page/${page}`, {
+  // Added the apiKey parameter here as well
+  const key = this.apiKey; 
+  const url = `/api/Reader/image?bookId=${chapterId}&pageNum=${page}&apiKey=${key}`;
+  const response = await this.client.get(url, {
     responseType: 'text',
   });
   return response.data;
 }
 
   // ── Reader ──────────────────────────────────────────────────────────────────
+async getChapterInfo(chapterId: number): Promise<ChapterInfo> {
+  const response = await this.client.get(`/api/Reader/chapter-info?chapterId=${chapterId}`);
+  
+  // Kavita sometimes nests this data or uses different field names (pages vs pageCount)
+  // Ensure we map it correctly to our interface
+  return {
+    ...response.data,
+    pages: response.data.pages || response.data.pagesCount || 0,
+    lastReadPage: response.data.lastReadPage ?? 0
+  };
+}
 
-  async getChapterInfo(chapterId: number): Promise<ChapterInfo | null> {
-    try {
-      const response = await this.client.get(`/api/Reader/chapter-info?chapterId=${chapterId}`);
-      return response.data;
-    } catch {
-      return null;
-    }
-  }
+// ── Reading progress ─────────────────────────────────────────────────────────
 
-  // ── Reading progress ─────────────────────────────────────────────────────────
-
-async saveReadingProgress(chapterId: number, page: number) {
+async saveReadingProgress(chapter: ChapterInfo, page: number) {
   try {
-    await this.client.post('/api/Reader/progress', {
-      chapterId: Number(chapterId), 
-      page: Number(page)
+    // We pass the apiKey in the query string as a fail-safe for this endpoint
+    const url = `/api/Reader/progress?apiKey=${this.apiKey}`;
+    
+    await this.client.post(url, {
+      libraryId: chapter.libraryId,
+      seriesId: chapter.seriesId,
+      volumeId: chapter.volumeId,
+      chapterId: chapter.chapterId,
+      pageNum: page,
+      isRead: false
     });
   } catch (err) {
-    const axiosError = err as AxiosError;
-    
+    const axiosError = err as any;
     if (axiosError.response) {
-      // This is the golden ticket—the actual reason Kavita said "No"
-      console.error('Kavita Response Data:', axiosError.response.data);
-      console.error('Kavita Status:', axiosError.response.status);
-    } else {
-      console.error('Failed to save reading progress', err);
+      console.error('Kavita Progress Validation Error:', axiosError.response.data);
     }
   }
 }
@@ -520,7 +573,8 @@ async saveReadingProgress(chapterId: number, page: number) {
   }
 
   getPdfPageImageUrl(chapterId: number, page: number): string {
-    return `${this.serverUrl}/api/reader/image?chapterId=${chapterId}&page=${page}&apiKey=${this.apiKey}&extractPdf=true`;
+    // Use the /image endpoint we discovered earlier
+    return `${this.serverUrl}/api/Reader/image?bookId=${chapterId}&pageNum=${page}&apiKey=${this.apiKey}`;
   }
 
   // ── Bookmarks ────────────────────────────────────────────────────────────────

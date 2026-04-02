@@ -70,7 +70,7 @@ export default function LoginScreen() {
               style={[styles.input, urlFocused && styles.inputFocused, proxyUrl && styles.inputReadonly]}
               value={serverUrl}
               onChangeText={setServerUrl}
-              placeholder="192.168.1.100:5000 or http://..."
+              placeholder="192.168.1.100:8050 or http://..."
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
               autoComplete="off"

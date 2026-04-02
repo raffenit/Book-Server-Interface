@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { kavitaAPI, KavitaBookInfo } from '../../services/kavitaAPI';
+import { kavitaAPI, ChapterInfo } from '../../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -42,14 +42,16 @@ pre,code{background:rgba(128,128,128,.15);border-radius:4px;padding:.1em .3em;fo
 }
 
 export default function EpubReaderScreen() {
-  const router = useRouter();
   const params = useLocalSearchParams<{
     chapterId: string;
     title: string;
     seriesId: string;
     volumeId: string;
+    libraryId: string; // Ensure this is captured from the search/params
   }>();
   const chapterId = Number(params.chapterId);
+
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -57,18 +59,19 @@ export default function EpubReaderScreen() {
   const [totalPages, setTotalPages] = useState(0);
   const [rawHtml, setRawHtml] = useState('');
   const [theme, setTheme] = useState<ThemeName>('dark');
+  
+  // 1. New State to hold our "ID Suitcase"
+  const [chapterInfo, setChapterInfo] = useState<ChapterInfo | null>(null);
 
-  // Replace your baseHref logic with this:
   const kavitaProxy = kavitaAPI.getServerUrl(); 
+  const pageUrl = kavitaAPI.getPdfPageImageUrl(chapterId, currentPage);
+  
+  // BaseHref for relative images inside the EPUB HTML
+  const baseHref = `${kavitaProxy}/api/Reader/image-proxy/${chapterId}/`;
 
-  const baseHref =
-    Platform.OS === 'web' && typeof window !== 'undefined'
-      ? `${kavitaProxy}/api/Reader/image-proxy/${chapterId}/` 
-      : `${kavitaProxy}/api/Reader/image-proxy/${chapterId}/`;
-
-  // Rebuild page HTML whenever raw content or theme changes (no extra network call on theme switch)
   const pageHtml = rawHtml ? buildPageHtml(rawHtml, THEMES[theme], baseHref) : '';
 
+  // 2. Updated loadPage to use the chapterInfo object for progress
   async function loadPage(page: number) {
     setLoading(true);
     setError('');
@@ -76,9 +79,11 @@ export default function EpubReaderScreen() {
       const html = await kavitaAPI.getBookPage(chapterId, page);
       setRawHtml(html);
       setCurrentPage(page);
-      kavitaAPI.saveReadingProgress(
-        chapterId, page,
-      );
+
+      // Only save progress if we successfully fetched the chapter metadata
+      if (chapterInfo) {
+        kavitaAPI.saveReadingProgress(chapterInfo, page);
+      }
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load page');
     } finally {
@@ -88,24 +93,19 @@ export default function EpubReaderScreen() {
 
   useEffect(() => {
     (async () => {
-      try {
-        const info: KavitaBookInfo = await kavitaAPI.getBookInfo(chapterId);
-        setTotalPages(info.pages ?? 0);
-
-        // Check if lastReadPage is a valid number (including 0)
-        // If it's undefined or null, default to 0
-        const startPage = (info.lastReadPage !== undefined && info.lastReadPage !== null)
-          ? info.lastReadPage 
-          : 0;
-
-        console.log(`Resuming at page: ${startPage}`);
-        await loadPage(startPage);
-      } catch (e: any) {
-        setError(e?.message ?? 'Failed to load book');
-        setLoading(false);
-      }
+      const info = await kavitaAPI.getChapterInfo(chapterId);
+      setChapterInfo(info);
+      // Resume logic
+      if (info?.lastReadPage) setCurrentPage(info.lastReadPage);
     })();
   }, [chapterId]);
+
+  function goToPage(page: number) {
+    setCurrentPage(page);
+    if (chapterInfo) {
+      kavitaAPI.saveReadingProgress(chapterInfo, page);
+    }
+  }
 
   function cycleTheme() {
     const order: ThemeName[] = ['dark', 'sepia', 'light'];

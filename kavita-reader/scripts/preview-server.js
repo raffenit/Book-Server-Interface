@@ -4,8 +4,8 @@
  * Avoids CORS entirely: the browser only talks to localhost.
  *
  * Usage:
- *   node scripts/preview-server.js http://100.x.x.x:5000
- *   KAVITA_URL=http://100.x.x.x:5000 node scripts/preview-server.js
+ *   node scripts/preview-server.js 
+ *   KAVITA_URL=http://100.x.x.x:8050 node scripts/preview-server.js
  */
 const http = require('http');
 const https = require('https');
@@ -15,12 +15,26 @@ const path = require('path');
 const DIST = path.join(__dirname, '..', 'dist');
 const PORT = process.env.PORT || 3000;
 
-let kavitaUrl = process.argv[2] || process.env.KAVITA_URL || '';
+// --- NEW ENV PARSING LOGIC ---
+function getEnvKavitaUrl() {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    // Look for EXPO_PUBLIC_KAVITA_URL in the file
+    const match = envContent.match(/^EXPO_PUBLIC_KAVITA_URL=(.*)$/m);
+    if (match && match[1]) return match[1].trim();
+  }
+  return '';
+}
+
+// Priority: Command line arg > Environment Var > .env file
+let kavitaUrl = process.argv[2] || process.env.KAVITA_URL || getEnvKavitaUrl();
+
 if (!kavitaUrl) {
-  console.error('\nUsage: node scripts/preview-server.js <kavita-url>');
-  console.error('  e.g. node scripts/preview-server.js http://100.104.199.67:5000\n');
+  console.error('\nUsage: node scripts/preview-server.js <kavita-url> or set EXPO_PUBLIC_KAVITA_URL in .env');
   process.exit(1);
 }
+
 if (!/^https?:\/\//i.test(kavitaUrl)) kavitaUrl = 'http://' + kavitaUrl;
 const target = new URL(kavitaUrl.replace(/\/$/, ''));
 

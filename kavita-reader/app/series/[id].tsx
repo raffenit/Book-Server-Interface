@@ -45,18 +45,23 @@ function formatLabel(fmt: number): string {
 }
 
 /** Flatten all volumes into a sorted chapter list. */
-function flatChapters(volumes: Volume[]) {
-  const result: { chapter: Chapter; volume: Volume }[] = [];
-  for (const vol of volumes) {
-    for (const ch of vol.chapters ?? []) {
-      // Check for the ID specifically
-      if (!ch.id) {
-        console.error("FOUND CHAPTER WITH MISSING ID:", ch.title, "in Volume", vol.id);
-      }
-      result.push({ chapter: ch, volume: vol });
-    }
-  }
-  return result;
+export function flatChapters(volumes: Volume[]) {
+  const result: { chapter: any; volume: any }[] = [];
+  
+  volumes.forEach((vol) => {
+    vol.chapters?.forEach((ch) => {
+      // LOG THIS: If you see 'undefined' or a number like '14', that's the 404 culprit
+      console.log(`Mapping Chapter: ${ch.title}, ID: ${ch.id}`); 
+      
+      result.push({
+        chapter: ch,
+        volume: vol,
+      });
+    });
+  });
+  
+  // Sort by chapter number to ensure "Resume" picks the right one
+  return result.sort((a, b) => a.chapter.chapterNumber - b.chapter.chapterNumber);
 }
 
 /** Pick first unfinished chapter, or last one if all done. */
@@ -559,17 +564,45 @@ export default function SeriesDetailScreen() {
   useEffect(() => { loadData(); }, [id]);
 
   function openChapter(chapter: Chapter, volume: Volume, fileOverride?: ChapterFile) {
+    // If we see -1000, we know the metadata is stale
+    if (volume.id < 0) {
+      console.warn("⚠️ Metadata Alert: This book is in a 'Virtual Volume' (-1000). Navigation may fail.");
+    }
+    
+    // 1. Identify the file and format
     const file = fileOverride ?? pickBestFile(chapter.files);
     const fmt = file?.format ?? chapterEffectiveFormat(chapter);
+
+    // 2. Build the navigation params
+    // Use the 'id' variable from your component's props/state for seriesId
     const navParams = {
       chapterId: chapter.id,
-      title: detail?.name ?? '',
       volumeId: volume.id,
-      seriesId: id,
+      seriesId: id, // Using your existing 'id' variable
+      title: detail?.name ?? '',
     };
+
+    // Log the exact URL that will be constructed in the Reader
+    console.log(`🔗 Requesting: /api/Book/${chapter.id}/book-info`);
+
+    // --- DEBUG LOG ---
+    console.log("NAVIGATING WITH:", navParams);
+
+    // 3. Logic-check the ID before navigating
+    if (!chapter.id || chapter.id === volume.id) {
+      console.error("Warning: Chapter ID is missing or matches Volume ID. This will 404.", {
+        chapterId: chapter.id,
+        seriesId: volume.id
+      });
+    }
+
+    // 4. Route to the correct reader
     if (fmt === 4) {
       router.push({ pathname: '/reader/pdf', params: navParams });
     } else if (fmt === 3) {
+      router.push({ pathname: '/reader/epub', params: navParams });
+    } else if (fmt == 0) {
+      console.log(`Format = 0! Checking Format: ${fmt} for Chapter: ${chapter.id}`);
       router.push({ pathname: '/reader/epub', params: navParams });
     } else {
       router.push({ pathname: '/reader/image', params: navParams });
@@ -728,8 +761,14 @@ export default function SeriesDetailScreen() {
           ) : (
             chapters.map(({ chapter, volume }) => {
               const chProgress = chapter.pages > 0 ? (chapter.pagesRead / chapter.pages) * 100 : 0;
-              const bestFile = pickBestFile(chapter.files);
-              const altFiles = (chapter.files ?? []).filter(f => f.id !== bestFile?.id);
+              
+              // Ensure we safely handle files
+              const files = chapter.files ?? [];
+              const bestFile = pickBestFile(files);
+              
+              // Explicitly type 'f' as the same type as bestFile
+              const altFiles = files.filter((f: typeof bestFile) => f && f.id !== bestFile?.id);
+                         
               const chLabel = chapter.isSpecial
                 ? chapter.title || 'Special'
                 : chapter.number !== '0'
@@ -739,7 +778,11 @@ export default function SeriesDetailScreen() {
                 <TouchableOpacity
                   key={chapter.id}
                   style={styles.chapterRow}
-                  onPress={() => openChapter(chapter, volume)}
+                  onPress={() => {
+                    console.log("NAVIGATING TO CHAPTER:", chapter.id);
+                    router.push({ pathname: '/reader/epub', params: { chapterId: chapter.id } });
+                    openChapter(chapter, volume)
+                  }}
                   activeOpacity={0.75}
                 >
                   <View style={styles.chapterLeft}>
@@ -752,11 +795,11 @@ export default function SeriesDetailScreen() {
                         </View>
                       )}
                       {/* Alt format chips */}
-                      {altFiles.map(f => (
+                      {altFiles.map((f: any) => ( // Type 'f' as any or your File type
                         <TouchableOpacity
                           key={f.id}
                           style={styles.altFormatBadge}
-                          onPress={(e) => {
+                          onPress={(e: any) => { // Type 'e' as any to allow stopPropagation()
                             e.stopPropagation();
                             openChapter(chapter, volume, f);
                           }}

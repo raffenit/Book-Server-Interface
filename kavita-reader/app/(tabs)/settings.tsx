@@ -122,7 +122,7 @@ function KavitaConfigModal({ visible, onClose }: { visible: boolean; onClose: ()
             style={absStyles.input}
             value={url}
             onChangeText={setUrl}
-            placeholder="192.168.1.100:5000 or http://..."
+            placeholder="192.168.1.100:8050 or http://..."
             placeholderTextColor={Colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}

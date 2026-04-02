@@ -6,7 +6,7 @@ Primary IP: 100.104.199.67 (Tailscale)
 ## 1. The Architecture
 
 Because mobile browsers and Expo Go enforce CORS (Cross-Origin Resource Sharing), the app cannot talk directly to Kavita or Audiobookshelf (ABS). We use Caddy in a Docker container as a "Reverse Proxy" to inject the necessary permissions.
-Kavita Path: App (:8050) → Caddy (:80) → Kavita (:5000)
+Kavita Path: App (:8050) → Caddy (:80) → Kavita (:8050)
 ABS Path: App (:8080) → Caddy (:81) → ABS (:13378)
 
 ## 2. The Caddy Configuration (Caddyfile)
@@ -16,7 +16,7 @@ This file lives at C:\Users\hudsons\Documents\Caddyfile. It tells Caddy to liste
 ### Kavita Proxy
 
 :80 {
-    reverse_proxy 100.104.199.67:5000
+    reverse_proxy 100.104.199.67:8050
     @cors_preflight method OPTIONS
     handle @cors_preflight {
         header Access-Control-Allow-Origin "*"

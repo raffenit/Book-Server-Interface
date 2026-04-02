@@ -1,5 +1,14 @@
 import axios, { AxiosInstance } from 'axios';
+import { Platform } from 'react-native';
 import { storage } from './storage';
+
+function isProxyMode(): boolean {
+  return (
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    (window as any).__KAVITA_PROXY__ === true
+  );
+}
 
 const STORAGE_KEYS = {
   SERVER_URL: 'abs_server_url',
@@ -77,23 +86,49 @@ class AudiobookshelfAPI {
   private apiKey: string = '';
 
   constructor() {
-    this.client = axios.create({ timeout: 30000 });
+    // 1. Pull the URL from the environment variable as a persistent default
+    const envUrl = process.env.EXPO_PUBLIC_ABS_URL || '';
+    
+    this.client = axios.create({ 
+      baseURL: envUrl, 
+      timeout: 30000 
+    });
+
     this.client.interceptors.request.use((config) => {
-      console.log("Interceptor firing! API Key is:", this.apiKey);
-      if (this.apiKey) config.headers.Authorization = `Bearer ${this.apiKey}`;
+      // 2. Clearer logging to distinguish between Kavita and ABS calls
+      if (__DEV__) {
+        console.log(`[ABS Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+      }
+
+      if (this.apiKey) {
+        // ABS uses Bearer token authentication
+        config.headers.Authorization = `Bearer ${this.apiKey}`;
+      }
       return config;
     });
   }
 
   async initialize() {
-    const url = (await storage.getItem(STORAGE_KEYS.SERVER_URL)) || '';
-    const key = (await storage.getItem(STORAGE_KEYS.API_KEY)) || '';
-    if (url && key) this.setServer(url, key);
+    try {
+      // 3. Fallback to Env if storage is empty
+      const storedUrl = await storage.getItem(STORAGE_KEYS.SERVER_URL);
+      const storedKey = await storage.getItem(STORAGE_KEYS.API_KEY);
+      const defaultUrl = process.env.EXPO_PUBLIC_ABS_URL || '';
+
+      const finalUrl = storedUrl || defaultUrl;
+
+      if (finalUrl && storedKey) {
+        this.setServer(finalUrl, storedKey);
+      }
+    } catch (e) {
+      console.error('Failed to initialize AudiobookshelfAPI', e);
+    }
   }
 
   private setServer(url: string, key: string) {
     let clean = url.trim().replace(/\/$/, '');
     if (!/^https?:\/\//i.test(clean)) clean = 'http://' + clean;
+    
     this.serverUrl = clean;
     this.apiKey = key;
     this.client.defaults.baseURL = clean;
@@ -114,6 +149,18 @@ class AudiobookshelfAPI {
     this.setServer(serverUrl, apiKey);
     await storage.setItem(STORAGE_KEYS.SERVER_URL, this.serverUrl);
     await storage.setItem(STORAGE_KEYS.API_KEY, apiKey);
+    this.apiKey = apiKey;
+
+    if (isProxyMode()) {
+      this.serverUrl = '';
+      this.client.defaults.baseURL = '';
+      return;
+    }
+    let cleanUrl = serverUrl.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(cleanUrl)) cleanUrl = 'http://' + cleanUrl;
+    this.serverUrl = cleanUrl;
+    this.client.defaults.baseURL = cleanUrl;
+    await storage.setItem(STORAGE_KEYS.SERVER_URL, cleanUrl);
   }
 
   async clearCredentials() {
@@ -175,19 +222,16 @@ class AudiobookshelfAPI {
 
   /** Report progress back to ABS */
   async saveAudioProgress(sessionId: string, currentTime: number, duration: number) {
-    // The endpoint for a live session is:
+    // Added a safety check to avoid 400 errors if sessionId is missing
+    if (!sessionId) return;
+    
     return await this.client.post(`/api/session/${sessionId}/sync`, {
       currentTime,
       duration,
-      timeListened: 0 // Scrubbing doesn't count as "listening time"
+      timeListened: 0 
     });
-    /*return await this.client.post(`/api/items/${itemId}/progress`, {
-      currentTime,
-      duration,
-      progress: currentTime / duration,
-      isFinished: false
-    });*/
   }
+
   /** Close playback session */
   async closeSession(sessionId: string, currentTime: number, duration: number) {
     try {

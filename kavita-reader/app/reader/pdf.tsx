@@ -9,48 +9,56 @@ import {
   Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { kavitaAPI } from '../../services/kavitaAPI';
+import { kavitaAPI, ChapterInfo } from '../../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function PDFReaderScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams<{
-    chapterId: string;
-    title: string;
-    seriesId: string;
-    volumeId: string;
-  }>();
+  const params = useLocalSearchParams<{ chapterId: string; title: string }>();
   const chapterId = Number(params.chapterId);
 
-  const [loading, setLoading] = useState(true);   // initial chapter info load
-  const [pageLoading, setPageLoading] = useState(true); // current page image load
-  const [error, setError] = useState('');
+  // 1. Create a state to hold the "suitcase" (ChapterInfo)
+  const [chapterInfo, setChapterInfo] = useState<ChapterInfo | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
-  const pageUrl = kavitaAPI.getPdfPageImageUrl(chapterId, currentPage);
-
   useEffect(() => {
     (async () => {
-      try {
-        const info = await kavitaAPI.getChapterInfo(chapterId);
-        setTotalPages(info?.pages ?? 0);
-      } catch (e: any) {
-        setError(e?.message ?? 'Failed to load PDF');
-      } finally {
-        setLoading(false);
-      }
+      const info = await kavitaAPI.getChapterInfo(chapterId);
+      setChapterInfo(info);
+      if (info?.lastReadPage) setCurrentPage(info.lastReadPage);
     })();
   }, [chapterId]);
 
   function goToPage(page: number) {
-    setPageLoading(true);
     setCurrentPage(page);
-    kavitaAPI.saveReadingProgress(
-      chapterId, page,
-    );
+    if (chapterInfo) {
+      kavitaAPI.saveReadingProgress(chapterInfo, page);
+    }
   }
+  
+  // pageUrl uses the /image endpoint we validated earlier
+  const pageUrl = kavitaAPI.getPdfPageImageUrl(chapterId, currentPage);
+  const router = useRouter();
+
+  // Loading state definition
+  const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState('');
+  
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // 2. Fetch the full info once when the screen loads
+        const info = await kavitaAPI.getChapterInfo(chapterId);
+        setChapterInfo(info); 
+        setTotalPages(info?.pages ?? 0);
+      } catch (e) {
+        console.error('Failed to load chapter info', e);
+      }
+    })();
+  }, [chapterId]);
 
   const canPrev = currentPage > 0 && !pageLoading;
   const canNext = currentPage < totalPages - 1 && !pageLoading;
