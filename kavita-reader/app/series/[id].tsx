@@ -78,6 +78,8 @@ function pickResumeChapter(volumes: Volume[]): { chapter: Chapter; volume: Volum
 // ── Chip component ─────────────────────────────────────────────────────────────
 
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   return (
     <TouchableOpacity
       style={[styles.chip, selected && styles.chipSelected]}
@@ -101,6 +103,9 @@ interface CoverPickerProps {
 }
 
 function CoverPickerModal({ visible, seriesId, seriesName, authorName, onClose, onSaved }: CoverPickerProps) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const Colors = colors;
   const [mode, setMode] = useState<'choose' | 'search'>('choose');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ coverId: number; title: string }[]>([]);
@@ -289,6 +294,7 @@ interface EditModalProps {
 function EditMetadataModal({ visible, seriesId, seriesName, onClose, onSaved }: EditModalProps) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
+  const Colors = colors;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [metadata, setMetadata] = useState<SeriesMetadata | null>(null);
@@ -584,6 +590,7 @@ function EditMetadataModal({ visible, seriesId, seriesName, onClose, onSaved }: 
 export default function SeriesDetailScreen() {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
+  const Colors = colors;
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -788,7 +795,7 @@ export default function SeriesDetailScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Back button (floats top-left always) */}
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={22} color="#fff" />
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
 
         {isLargeScreen ? (

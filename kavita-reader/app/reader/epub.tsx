@@ -13,9 +13,10 @@ interface BuildOptions {
   apiKey: string;
   fontFamily?: string;
   customFontFace?: string;
+  colors: any;
 }
 
-function buildPageHtml(rawHtml: string, { serverUrl, chapterId, apiKey, fontFamily = 'Georgia, "Times New Roman", serif', customFontFace = '' }: BuildOptions): string {
+function buildPageHtml(rawHtml: string, { serverUrl, chapterId, apiKey, fontFamily = 'Georgia, "Times New Roman", serif', customFontFace = '', colors }: BuildOptions): string {
   // Kavita returns a full HTML document — extract just the body content
   const bodyMatch = rawHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   const rawContent = bodyMatch
@@ -86,7 +87,7 @@ function buildPageHtml(rawHtml: string, { serverUrl, chapterId, apiKey, fontFami
   html, body {
     margin: 0; padding: 0;
     height: 100%; width: 100%;
-    background-color: #0d0d12;
+    background-color: ${colors.background};
     overflow: hidden;
   }
 
@@ -127,7 +128,7 @@ function buildPageHtml(rawHtml: string, { serverUrl, chapterId, apiKey, fontFami
   }
 
   #book-content {
-    color: #e2e2e2;
+    color: ${colors.textPrimary};
     font-family: ${fontFamily};
     font-size: 18px;
     line-height: 1.7;
@@ -142,7 +143,7 @@ function buildPageHtml(rawHtml: string, { serverUrl, chapterId, apiKey, fontFami
     margin: 10px auto;
     filter: brightness(0.85);
   }
-  a { color: #c8c8c8; }
+  a { color: ${colors.accent}; }
   body::-webkit-scrollbar { display: none; }
 </style>
 <script>
@@ -204,6 +205,9 @@ function buildPageHtml(rawHtml: string, { serverUrl, chapterId, apiKey, fontFami
 }
 
 export default function EpubReaderScreen() {
+  const { colors, fontFamily, activeCustomFontId, customFonts } = useTheme();
+  const styles = makeStyles(colors);
+  const Colors = colors;
   const params = useLocalSearchParams<{ chapterId: string; title: string }>();
   const chapterId = Number(params.chapterId);
   const router = useRouter();
@@ -224,7 +228,6 @@ export default function EpubReaderScreen() {
 
   currentPageRef.current = currentPage;
 
-  const { fontFamily, activeCustomFontId, customFonts } = useTheme();
   const activeCustomFont = activeCustomFontId
     ? customFonts.find(f => f.id === activeCustomFontId)
     : null;
@@ -236,6 +239,7 @@ export default function EpubReaderScreen() {
     customFontFace: activeCustomFont
       ? `@font-face { font-family: '${activeCustomFont.name}'; src: url('${activeCustomFont.dataUrl}'); }`
       : undefined,
+    colors,
   }) : '';
 
   const loadPage = useCallback(async (page: number) => {
@@ -367,7 +371,7 @@ export default function EpubReaderScreen() {
           }
           router.back();
         }}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={styles.headerTitle} numberOfLines={1}>{params.title}</Text>
@@ -410,14 +414,14 @@ export default function EpubReaderScreen() {
               border: 'none',
               width: '100%',
               height: '100%',
-              backgroundColor: '#0d0d12',
+              backgroundColor: colors.background,
             }}
           />
-        ) : <Text style={{ color: '#fff' }}>Web Only Reader</Text>}
+        ) : <Text style={{ color: colors.textPrimary }}>Web Only Reader</Text>}
 
         {loading && (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator color={Colors.accent} size="large" />
+            <ActivityIndicator color={colors.accent} size="large" />
           </View>
         )}
       </View>
@@ -427,15 +431,15 @@ export default function EpubReaderScreen() {
           onPress={() => { loadPage(currentPage - 1); }}
           style={styles.navBtn}
         >
-          <Ionicons name="play-skip-back" size={20} color="#fff" />
+          <Ionicons name="play-skip-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
 
         {/* Tap the center to re-focus arrow key navigation into the reader */}
         <TouchableOpacity onPress={focusIframe} style={{ alignItems: 'center' }}>
-          <Text style={{ color: '#aaa', fontSize: 11, marginBottom: 2 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 2 }}>
             Page {visualPage + 1} of {totalVisualPages}
           </Text>
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
+          <Text style={{ color: colors.textPrimary, fontWeight: 'bold', fontSize: 13 }}>
             Chapter {currentPage + 1} of {totalPages}
           </Text>
         </TouchableOpacity>
@@ -444,46 +448,52 @@ export default function EpubReaderScreen() {
           onPress={() => { loadPage(currentPage + 1); }}
           style={styles.navBtn}
         >
-          <Ionicons name="play-skip-forward" size={20} color="#fff" />
+          <Ionicons name="play-skip-forward" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d12' },
+import { ColorScheme } from '../../constants/theme';
+const makeStyles = (colors: ColorScheme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 20,
     paddingTop: 50,
-    backgroundColor: '#1a1a22',
+    backgroundColor: colors.surfaceElevated,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  headerTitle: { color: '#fff', textAlign: 'center', fontWeight: 'bold', fontSize: 15 },
-  headerSubtitle: { color: '#aaa', textAlign: 'center', fontSize: 12, marginTop: 2 },
+  headerTitle: { color: colors.textPrimary, textAlign: 'center', fontWeight: 'bold', fontSize: 15 },
+  headerSubtitle: { color: colors.textSecondary, textAlign: 'center', fontSize: 12, marginTop: 2 },
   contentArea: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#0d0d12',
+    backgroundColor: colors.background,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: 'transparent',
   },
   contentAreaFocused: {
-    borderColor: '#5b8dd9',
+    borderColor: colors.accent,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#1a1a22',
+    backgroundColor: colors.surfaceElevated,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
-  navBtn: { padding: 10, backgroundColor: '#333', borderRadius: 8 },
+  navBtn: { padding: 10, backgroundColor: colors.surface, borderRadius: 8 },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(13, 13, 18, 0.7)',
+    backgroundColor: colors.background,
+    opacity: 0.8,
     justifyContent: 'center',
     alignItems: 'center',
     pointerEvents: 'none',

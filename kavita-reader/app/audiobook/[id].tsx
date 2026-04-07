@@ -7,7 +7,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { absAPI, ABSLibraryItem } from '../../services/audiobookshelfAPI';
 import { useAudioPlayer } from '../../contexts/AudioPlayerContext';
-import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Typography, Spacing, Radius, ColorScheme } from '../../constants/theme';
 
 function formatTime(seconds: number): string {
   const s = Math.floor(seconds);
@@ -24,6 +25,8 @@ import Slider from '@react-native-community/slider';
 export function SeekBar({ current, duration, onSeek }: { 
   current: number; duration: number; onSeek: (seconds: number) => void; 
 }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   // Local state to make the "scrub" feel smooth without jumping back 
   // to the server's last known position immediately.
   const [isSliding, setIsSliding] = useState(false);
@@ -54,9 +57,9 @@ export function SeekBar({ current, duration, onSeek }: {
           }
         }}
         
-        minimumTrackTintColor="#FFFFFF"
-        maximumTrackTintColor="#444444"
-        thumbTintColor="#FFFFFF"
+        minimumTrackTintColor={useTheme().colors.textPrimary}
+        maximumTrackTintColor={useTheme().colors.borderLight}
+        thumbTintColor={useTheme().colors.textPrimary}
       />
 
       <View style={styles.timeRow}>
@@ -70,6 +73,8 @@ export function SeekBar({ current, duration, onSeek }: {
 }
 
 export default function AudiobookPlayerScreen() {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
@@ -106,7 +111,7 @@ export default function AudiobookPlayerScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={Colors.accent} size="large" />
+        <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }
@@ -122,7 +127,7 @@ export default function AudiobookPlayerScreen() {
       <View style={styles.container}>
         {/* Back */}
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-down" size={28} color={Colors.textPrimary} />
+          <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
         </TouchableOpacity>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -146,7 +151,7 @@ export default function AudiobookPlayerScreen() {
           {/* Controls */}
           <View style={styles.controls}>
             <TouchableOpacity onPress={() => skipBack(15)} style={styles.controlBtn}>
-              <Ionicons name="play-back" size={28} color={Colors.textPrimary} />
+              <Ionicons name="play-back" size={28} color={colors.textPrimary} />
               <Text style={styles.skipLabel}>15</Text>
             </TouchableOpacity>
 
@@ -154,12 +159,12 @@ export default function AudiobookPlayerScreen() {
               <Ionicons
                 name={isPlaying && isCurrentItem ? 'pause' : 'play'}
                 size={36}
-                color={Colors.textOnAccent}
+                color={colors.textOnAccent}
               />
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => skipForward(30)} style={styles.controlBtn}>
-              <Ionicons name="play-forward" size={28} color={Colors.textPrimary} />
+              <Ionicons name="play-forward" size={28} color={colors.textPrimary} />
               <Text style={styles.skipLabel}>30</Text>
             </TouchableOpacity>
           </View>
@@ -168,7 +173,7 @@ export default function AudiobookPlayerScreen() {
           {isCurrentItem && nowPlaying!.tracks.length > 1 && (
             <View style={styles.chaptersBlock}>
               <Text style={styles.chaptersHeading}>Chapters</Text>
-              {nowPlaying!.tracks.map((track, i) => (
+              {nowPlaying!.tracks.map((track: any, i: number) => (
                 <TouchableOpacity
                   key={track.index}
                   style={[
@@ -202,14 +207,14 @@ export default function AudiobookPlayerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorScheme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -231,8 +236,8 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    shadowColor: '#000',
+    backgroundColor: colors.surface,
+    shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
@@ -246,18 +251,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Typography.xl,
     fontWeight: Typography.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: 'Georgia',
     textAlign: 'center',
   },
   author: {
     fontSize: Typography.md,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   narrator: {
     fontSize: Typography.sm,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   seekerBlock: {
@@ -269,7 +274,7 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     position: 'relative',
-    backgroundColor: Colors.progressTrack,
+    backgroundColor: colors.progressTrack,
     borderRadius: 3,
   },
   seekFill: {
@@ -277,7 +282,7 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     borderRadius: 3,
   },
   seekThumb: {
@@ -285,7 +290,7 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     top: '50%',
     marginTop: -7,
     marginLeft: -7,
@@ -296,7 +301,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: Typography.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
   controls: {
@@ -311,16 +316,16 @@ const styles = StyleSheet.create({
   },
   skipLabel: {
     fontSize: Typography.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   playBtn: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.accent,
+    shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -333,7 +338,7 @@ const styles = StyleSheet.create({
   chaptersHeading: {
     fontSize: Typography.sm,
     fontWeight: Typography.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -343,7 +348,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   chapterRowActive: {
     // highlight active chapter
@@ -351,16 +356,16 @@ const styles = StyleSheet.create({
   chapterTitle: {
     flex: 1,
     fontSize: Typography.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginRight: Spacing.md,
   },
   chapterTitleActive: {
-    color: Colors.accent,
+    color: colors.accent,
     fontWeight: Typography.semibold,
   },
   chapterDuration: {
     fontSize: Typography.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
   descBlock: {
@@ -370,13 +375,13 @@ const styles = StyleSheet.create({
   descHeading: {
     fontSize: Typography.sm,
     fontWeight: Typography.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   desc: {
     fontSize: Typography.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 22,
   },
 });

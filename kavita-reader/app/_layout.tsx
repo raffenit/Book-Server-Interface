@@ -89,8 +89,8 @@ export default function RootLayout() {
   // 4. LOADING SPINNER
   if (!isReady) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0d0d12' }}>
-        <ActivityIndicator size="large" color="#e8a838" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
+        <ActivityIndicator size="large" color={Colors.accent} />
       </View>
     );
   }

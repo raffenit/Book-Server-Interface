@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { kavitaAPI } from '../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { useTheme } from '../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
 export interface ChipContextMenuPosition {
@@ -39,6 +40,7 @@ export default function GenreTagContextMenu({
   visible, itemId, itemTitle, itemType, position, onClose, onRemoved,
 }: Props) {
   const { width, height } = useWindowDimensions();
+  const { colors } = useTheme();
   const [confirming, setConfirming] = useState(false);
   const [working, setWorking] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -85,33 +87,33 @@ export default function GenreTagContextMenu({
         <View style={styles.backdrop} />
       </TouchableWithoutFeedback>
 
-      <View style={[styles.menu, { width: MENU_W, top, left }]}>
-        <View style={styles.header}>
-          <Text style={styles.title} numberOfLines={1}>
+      <View style={[styles.menu, { width: MENU_W, top, left, backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.cardShadow }]}>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
             {itemType === 'genre' ? 'Genre' : 'Tag'}: {itemTitle}
           </Text>
           <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-            <Ionicons name="close" size={16} color={Colors.textMuted} />
+            <Ionicons name="close" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
         {!confirming && !working && !done && (
           <TouchableOpacity style={styles.actionRow} onPress={() => setConfirming(true)} activeOpacity={0.75}>
-            <Ionicons name="trash-outline" size={16} color={Colors.error} />
-            <Text style={styles.actionText}>Remove from all series</Text>
+            <Ionicons name="trash-outline" size={16} color={colors.error} />
+            <Text style={[styles.actionText, { color: colors.error }]}>Remove from all series</Text>
           </TouchableOpacity>
         )}
 
         {confirming && !working && (
           <View style={styles.confirmArea}>
-            <Text style={styles.confirmText}>
+            <Text style={[styles.confirmText, { color: colors.textPrimary }]}>
               Remove "{itemTitle}" from every series that has it?
             </Text>
             <View style={styles.confirmButtons}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setConfirming(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+              <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => setConfirming(false)}>
+                <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteBtn} onPress={runRemove}>
+              <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: colors.error }]} onPress={runRemove}>
                 <Text style={styles.deleteBtnText}>Remove</Text>
               </TouchableOpacity>
             </View>
@@ -120,26 +122,26 @@ export default function GenreTagContextMenu({
 
         {working && (
           <View style={styles.progressArea}>
-            <ActivityIndicator color={Colors.accent} />
+            <ActivityIndicator color={colors.accent} />
             {progress && progress.total > 0 && (
-              <Text style={styles.progressText}>
+              <Text style={[styles.progressText, { color: colors.textSecondary }]}>
                 {progress.done} / {progress.total} series…
               </Text>
             )}
             {progress && progress.total === 0 && (
-              <Text style={styles.progressText}>Loading…</Text>
+              <Text style={[styles.progressText, { color: colors.textSecondary }]}>Loading…</Text>
             )}
           </View>
         )}
 
         {done && (
           <View style={styles.progressArea}>
-            <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-            <Text style={styles.progressText}>Done!</Text>
+            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+            <Text style={[styles.progressText, { color: colors.textSecondary }]}>Done!</Text>
           </View>
         )}
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}
       </View>
     </Modal>
   );

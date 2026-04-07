@@ -10,10 +10,14 @@ import {
 import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { kavitaAPI, ChapterInfo } from '../../services/kavitaAPI';
-import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Typography, Spacing, Radius, ColorScheme } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ImageReaderScreen() {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const Colors = colors;
   const router = useRouter();
   const params = useLocalSearchParams<{
     chapterId: string;
@@ -58,7 +62,7 @@ export default function ImageReaderScreen() {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      background: #0d0d12;
+      background: ${colors.background};
       height: 100%;
       overflow: hidden;
       user-select: none;
@@ -79,13 +83,13 @@ export default function ImageReaderScreen() {
       display: none;
     }
     #spinner {
-      color: #e8a838;
+      color: ${colors.accent};
       font-family: sans-serif;
       font-size: 15px;
       text-align: center;
     }
     #error-msg {
-      color: #e05c5c;
+      color: ${colors.error};
       font-family: sans-serif;
       font-size: 13px;
       text-align: center;
@@ -302,8 +306,8 @@ export default function ImageReaderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d12' },
+const makeStyles = (colors: ColorScheme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   webview: { flex: 1 },
   header: {
     position: 'absolute',
@@ -314,7 +318,9 @@ const styles = StyleSheet.create({
     paddingTop: 44,
     paddingHorizontal: Spacing.base,
     paddingBottom: Spacing.md,
-    backgroundColor: 'rgba(13,13,18,0.92)',
+    backgroundColor: colors.surfaceElevated,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   headerBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerTitle: {
@@ -322,11 +328,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: Typography.base,
     fontWeight: Typography.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   pageCount: {
     fontSize: Typography.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     minWidth: 60,
     textAlign: 'right',
   },
@@ -339,32 +345,34 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     paddingTop: Spacing.md,
     paddingHorizontal: Spacing.md,
-    backgroundColor: 'rgba(13,13,18,0.92)',
+    backgroundColor: colors.surfaceElevated,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     gap: Spacing.sm,
   },
   navBtn: {
     width: 44, height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
   },
   progressContainer: { flex: 1, alignItems: 'center' },
   progressTrack: {
     width: '100%', height: 3,
-    backgroundColor: Colors.progressTrack,
+    backgroundColor: colors.progressTrack,
     borderRadius: Radius.full,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%', backgroundColor: Colors.accent },
+  progressFill: { height: '100%', backgroundColor: colors.accent },
   loadingOverlay: {
     position: 'absolute',
     top: 0, bottom: 0, left: 0, right: 0,
     zIndex: 20,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.md,
   },
-  loadingText: { fontSize: Typography.base, color: Colors.textSecondary },
+  loadingText: { fontSize: Typography.base, color: colors.textSecondary },
 });

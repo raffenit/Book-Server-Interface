@@ -10,10 +10,14 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { kavitaAPI, ChapterInfo } from '../../services/kavitaAPI';
-import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Typography, Spacing, Radius, ColorScheme } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function PDFReaderScreen() {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const Colors = colors;
   const params = useLocalSearchParams<{ chapterId: string; title: string }>();
   const chapterId = Number(params.chapterId);
 
@@ -144,11 +148,11 @@ export default function PDFReaderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111' },
+const makeStyles = (colors: ColorScheme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   centered: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.md,
@@ -160,7 +164,9 @@ const styles = StyleSheet.create({
     paddingTop: 44,
     paddingHorizontal: Spacing.base,
     paddingBottom: Spacing.md,
-    backgroundColor: 'rgba(13,13,18,0.92)',
+    backgroundColor: colors.surfaceElevated,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     zIndex: 10,
   },
   headerBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
@@ -169,11 +175,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: Typography.base,
     fontWeight: Typography.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   pageArea: {
     flex: 1,
-    backgroundColor: '#111',
+    backgroundColor: colors.background,
     position: 'relative',
   },
   pageImage: {
@@ -186,7 +192,8 @@ const styles = StyleSheet.create({
     top: 0, bottom: 0, left: 0, right: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(17,17,17,0.6)',
+    backgroundColor: colors.background,
+    opacity: 0.8,
   },
   footer: {
     flexDirection: 'row',
@@ -194,7 +201,9 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     paddingTop: Spacing.md,
     paddingHorizontal: Spacing.md,
-    backgroundColor: 'rgba(13,13,18,0.92)',
+    backgroundColor: colors.surfaceElevated,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     gap: Spacing.sm,
   },
   navBtn: {
@@ -202,7 +211,7 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
   },
   navBtnDisabled: { opacity: 0.4 },
@@ -210,19 +219,19 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: '100%',
     height: 3,
-    backgroundColor: Colors.progressTrack,
+    backgroundColor: colors.progressTrack,
     borderRadius: Radius.full,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%', backgroundColor: Colors.accent },
-  progressText: { fontSize: Typography.xs, color: Colors.textSecondary },
-  loadingText: { fontSize: Typography.base, color: Colors.textSecondary },
+  progressFill: { height: '100%', backgroundColor: colors.accent },
+  progressText: { fontSize: Typography.xs, color: colors.textSecondary },
+  loadingText: { fontSize: Typography.base, color: colors.textSecondary },
   errorText: {
     fontSize: Typography.base,
-    color: Colors.error,
+    color: colors.error,
     textAlign: 'center',
     lineHeight: 22,
   },
   goBack: { marginTop: Spacing.sm },
-  goBackText: { color: Colors.accent, fontSize: Typography.base },
+  goBackText: { color: colors.accent, fontSize: Typography.base },
 });

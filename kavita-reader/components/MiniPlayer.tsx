@@ -38,7 +38,7 @@ export function MiniPlayer() {
       bottom: Platform.OS === 'ios' ? 78 : 68,
       backgroundColor: colors.surfaceElevated,
       borderTopWidth: 1, borderTopColor: colors.border,
-      shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+      shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: -4 },
       shadowOpacity: 0.3, shadowRadius: 8, elevation: 12,
     }}>
       {/* Progress bar */}

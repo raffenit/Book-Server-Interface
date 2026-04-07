@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { View, Text, Platform } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface Props {
   size?: number;
@@ -95,18 +96,19 @@ function blend(hex1: string, hex2: string, t: number): string {
 
 export function FolioLogo({
   size = 48,
-  accentColor = '#e8a838',
-  textColor = '#f0ead8',
+  accentColor,
+  textColor,
   showLabel = false,
 }: Props) {
+  const { colors } = useTheme();
   return (
     <View style={{ alignItems: 'center', gap: 6 }}>
-      <BookshelfSvg size={size} accent={accentColor} bg="#0d0d12" />
+      <BookshelfSvg size={size} accent={accentColor || colors.accent} bg={colors.background} />
       {showLabel && (
         <Text style={{
           fontSize: size * 0.28,
           fontWeight: '700',
-          color: textColor,
+          color: textColor || colors.textPrimary,
           fontFamily: 'Georgia',
           letterSpacing: size * 0.04,
           textTransform: 'uppercase',

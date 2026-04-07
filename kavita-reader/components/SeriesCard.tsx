@@ -12,6 +12,7 @@ import {
 import { Series } from '../services/kavitaAPI';
 import { kavitaAPI } from '../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 const GAP = Spacing.sm;
 const SIDE_MARGIN = Spacing.base;
@@ -46,6 +47,7 @@ function getFormatIcon(format: number): string {
 }
 
 export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }: Props) {
+  const { colors } = useTheme();
   const progress = series.pages > 0 ? (series.pagesRead / series.pages) * 100 : 0;
   const coverUrl = kavitaAPI.getSeriesCoverUrl(series.id);
   const containerRef = useRef<View>(null);
@@ -78,32 +80,33 @@ export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }:
       delayLongPress={400}
       activeOpacity={0.8}
     >
-      <View style={styles.coverContainer}>
+      <View style={[styles.coverContainer, { backgroundColor: colors.surface }]}>
         <Image
           source={{ uri: coverUrl }}
           style={styles.cover}
           resizeMode="cover"
         />
         <View style={styles.formatBadge}>
-          <Text style={styles.formatText}>{getFormatIcon(series.format)}</Text>
+          <Text style={[styles.formatText, { color: colors.accent }]}>{getFormatIcon(series.format)}</Text>
         </View>
         {progress > 0 && progress < 100 && (
           <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+            <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.accent }]} />
           </View>
         )}
         {progress >= 100 && (
-          <View style={styles.completedBadge}>
-            <Text style={styles.completedText}>✓</Text>
+          <View style={[styles.completedBadge, { backgroundColor: colors.success }]}>
+            <Text style={[styles.completedText, { color: '#fff' }]}>✓</Text>
           </View>
         )}
       </View>
-      <Text style={styles.title} numberOfLines={2}>{series.name}</Text>
+      <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{series.name}</Text>
     </TouchableOpacity>
   );
 }
 
 export function SeriesCardLarge({ series, onPress, onContextMenu }: Props) {
+  const { colors } = useTheme();
   const progress = series.pages > 0 ? (series.pagesRead / series.pages) * 100 : 0;
   const coverUrl = kavitaAPI.getSeriesCoverUrl(series.id);
   const containerRef = useRef<View>(null);
@@ -129,7 +132,7 @@ export function SeriesCardLarge({ series, onPress, onContextMenu }: Props) {
   return (
     <TouchableOpacity
       ref={containerRef}
-      style={styles.cardLarge}
+      style={[styles.cardLarge, { backgroundColor: colors.surface }]}
       onPress={onPress}
       onLongPress={onContextMenu ? handleLongPress : undefined}
       delayLongPress={400}
@@ -137,16 +140,16 @@ export function SeriesCardLarge({ series, onPress, onContextMenu }: Props) {
     >
       <Image source={{ uri: coverUrl }} style={styles.coverLarge} resizeMode="cover" />
       <View style={styles.infoLarge}>
-        <Text style={styles.titleLarge} numberOfLines={2}>{series.name}</Text>
+        <Text style={[styles.titleLarge, { color: colors.textPrimary }]} numberOfLines={2}>{series.name}</Text>
         {series.libraryName && (
-          <Text style={styles.library}>{series.libraryName}</Text>
+          <Text style={[styles.library, { color: colors.accent }]}>{series.libraryName}</Text>
         )}
         {progress > 0 && (
           <View style={styles.progressContainer}>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%` }]} />
+            <View style={[styles.progressTrack, { backgroundColor: colors.progressTrack }]}>
+              <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%`, backgroundColor: colors.accent }]} />
             </View>
-            <Text style={styles.progressText}>{Math.round(progress)}%</Text>
+            <Text style={[styles.progressText, { color: colors.textSecondary }]}>{Math.round(progress)}%</Text>
           </View>
         )}
       </View>
