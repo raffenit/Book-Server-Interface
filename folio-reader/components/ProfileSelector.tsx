@@ -14,6 +14,38 @@ import { Ionicons } from '@expo/vector-icons';
 import { Profile, PROFILE_COLORS, useProfile } from '../contexts/ProfileContext';
 import { Typography, Spacing, Radius, Colors } from '../constants/theme';
 
+// Helper to compress and resize image before storing
+const compressImage = (dataUrl: string, maxWidth: number = 200, quality: number = 0.7): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      // Calculate new dimensions while maintaining aspect ratio
+      let width = img.naturalWidth;
+      let height = img.naturalHeight;
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Convert to compressed JPEG
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = dataUrl;
+  });
+};
+
 // Helper to handle image file selection and convert to base64
 const pickImage = (): Promise<string | null> => {
   return new Promise((resolve) => {
@@ -22,22 +54,29 @@ const pickImage = (): Promise<string | null> => {
       resolve(null);
       return;
     }
-    
+
     // Web: Create file input
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) {
         resolve(null);
         return;
       }
-      
+
       const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result); // base64 data URL
+      reader.onload = async () => {
+        try {
+          // Compress the image before returning
+          const compressed = await compressImage(reader.result as string, 200, 0.7);
+          resolve(compressed);
+        } catch (err) {
+          console.error('[ProfileSelector] Image compression failed:', err);
+          // Fall back to original if compression fails
+          resolve(reader.result as string);
+        }
       };
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(file);
