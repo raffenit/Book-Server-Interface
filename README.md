@@ -125,16 +125,31 @@ The deploy webhook server (`docker-compose.deploy.yml`) provides two features:
 
 #### Setup
 
-```bash
-# Create data directory for profile storage
-mkdir -p /home/jewelshadow/Documents/Projects/Folio/data
+1. **Copy the example configuration:**
+   ```bash
+   cp .env.example .env
+   ```
 
-# Set a secret for security (used for both deploy and sync)
-export DEPLOY_SECRET="your-secret-here"
+2. **Edit `.env` and set your secrets:**
+   ```bash
+   # This is the password for your cloud sync server
+   DEPLOY_SECRET=your-secure-secret-here-change-me
+   
+   # Optional: Auto-discovery URL for mobile apps
+   PUBLIC_SERVER_URL=http://YOUR_SERVER_IP:9000
+   ```
 
-# Start the webhook + sync server
-docker-compose -f docker-compose.deploy.yml up -d --build
-```
+3. **Create data directory:**
+   ```bash
+   mkdir -p /home/jewelshadow/Documents/Projects/Folio/data
+   ```
+
+4. **Start the webhook + sync server:**
+   ```bash
+   docker-compose -f docker-compose.deploy.yml up -d --build
+   ```
+
+**Security note:** The `.env` file is in `.gitignore` and will not be committed. Keep your secrets private!
 
 #### Feature 1: Auto-Deploy Webhook
 

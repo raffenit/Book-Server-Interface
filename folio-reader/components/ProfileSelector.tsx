@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -91,7 +91,7 @@ interface ProfileSelectorProps {
 }
 
 export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelectorProps) {
-  const { profiles, loading, hasLegacyData, migrateLegacyData, createProfile, selectProfile, updateProfile, deleteProfile } = useProfile();
+  const { profiles, loading, hasLegacyData, migrateLegacyData, createProfile, selectProfile, updateProfile, deleteProfile, importCloudProfiles } = useProfile();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PROFILE_COLORS[0]);
@@ -105,6 +105,14 @@ export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelect
   // Avatar state
   const [newAvatar, setNewAvatar] = useState<string | null>(null);
   const [editAvatar, setEditAvatar] = useState<string | null>(null);
+
+  // Cloud import state
+  const [showCloudModal, setShowCloudModal] = useState(false);
+  const [cloudUrl, setCloudUrl] = useState('');
+  const [cloudApiKey, setCloudApiKey] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importedProfiles, setImportedProfiles] = useState<Profile[] | null>(null);
 
   const handleLegacyMigration = async () => {
     const profile = await migrateLegacyData();
@@ -163,6 +171,32 @@ export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelect
     if (confirm(`Delete profile "${profile.name}"? This will remove all profile data.`)) {
       await deleteProfile(profile.id);
     }
+  };
+
+  const handleCloudImport = async () => {
+    if (!cloudUrl.trim() || !cloudApiKey.trim()) return;
+    
+    setImportLoading(true);
+    setImportError(null);
+    
+    const result = await importCloudProfiles(cloudUrl.trim(), cloudApiKey.trim());
+    
+    setImportLoading(false);
+    
+    if (result.success && result.profiles && result.profiles.length > 0) {
+      setImportedProfiles(result.profiles);
+    } else {
+      setImportError(result.error || 'Failed to import profiles');
+    }
+  };
+
+  const handleSelectImportedProfile = async (profile: Profile) => {
+    await selectProfile(profile.id);
+    onSelectProfile(profile);
+    setShowCloudModal(false);
+    setImportedProfiles(null);
+    setCloudUrl('');
+    setCloudApiKey('');
   };
 
   if (loading) {
@@ -256,6 +290,20 @@ export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelect
           </View>
           <Text style={styles.addProfileText}>Add Profile</Text>
         </TouchableOpacity>
+
+        {/* Load from Cloud Button - shown when no profiles exist */}
+        {profiles.length === 0 && (
+          <TouchableOpacity
+            style={styles.cloudProfileCard}
+            onPress={() => setShowCloudModal(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.cloudAvatar}>
+              <Ionicons name="cloud-download" size={32} color={Colors.accent} />
+            </View>
+            <Text style={styles.cloudProfileText}>Load from Cloud</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Add Profile Modal */}
@@ -295,7 +343,216 @@ export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelect
         title="Edit Profile"
         confirmText="Save"
       />
+
+      {/* Cloud Import Modal */}
+      <CloudImportModal
+        visible={showCloudModal}
+        onClose={() => {
+          setShowCloudModal(false);
+          setImportedProfiles(null);
+          setImportError(null);
+          setCloudUrl('');
+          setCloudApiKey('');
+        }}
+        onImport={handleCloudImport}
+        url={cloudUrl}
+        setUrl={setCloudUrl}
+        apiKey={cloudApiKey}
+        setApiKey={setCloudApiKey}
+        loading={importLoading}
+        error={importError}
+        importedProfiles={importedProfiles}
+        onSelectProfile={handleSelectImportedProfile}
+      />
     </View>
+  );
+}
+
+interface CloudImportModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onImport: () => void;
+  url: string;
+  setUrl: (url: string) => void;
+  apiKey: string;
+  setApiKey: (key: string) => void;
+  loading: boolean;
+  error: string | null;
+  importedProfiles: Profile[] | null;
+  onSelectProfile: (profile: Profile) => void;
+}
+
+function CloudImportModal({
+  visible,
+  onClose,
+  onImport,
+  url,
+  setUrl,
+  apiKey,
+  setApiKey,
+  loading,
+  error,
+  importedProfiles,
+  onSelectProfile,
+}: CloudImportModalProps) {
+  const [discovering, setDiscovering] = useState(false);
+
+  // Auto-discover server URL from well-known endpoints
+  useEffect(() => {
+    if (!visible || url) return;
+    
+    const discoverServer = async () => {
+      setDiscovering(true);
+      
+      // Try common local network patterns
+      const candidates = [
+        'http://localhost:9000',
+        'http://127.0.0.1:9000',
+        typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
+          ? `http://${window.location.hostname}:9000` 
+          : null,
+      ].filter(Boolean) as string[];
+      
+      for (const candidate of candidates) {
+        try {
+          const response = await fetch(`${candidate}/api/config`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(3000),
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.syncServerUrl) {
+              setUrl(data.syncServerUrl);
+              console.log('[CloudImport] Auto-discovered server:', data.syncServerUrl);
+              break;
+            } else if (data.hasAutoDiscovery) {
+              setUrl(candidate);
+              console.log('[CloudImport] Using discovered server:', candidate);
+              break;
+            }
+          }
+        } catch (e) {
+          // Try next candidate
+        }
+      }
+      
+      setDiscovering(false);
+    };
+    
+    discoverServer();
+  }, [visible, url, setUrl]);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          {!importedProfiles ? (
+            <>
+              <Text style={styles.modalTitle}>Load from Cloud</Text>
+              <Text style={styles.subtitle}>
+                Enter your cloud sync server details to import profiles.
+              </Text>
+
+              <TextInput
+                style={[styles.nameInput, discovering && { borderColor: Colors.accent, borderWidth: 1 }]}
+                placeholder={discovering ? "Discovering server..." : "Server URL (e.g., http://your-server:9000)"}
+                placeholderTextColor="#999"
+                value={url}
+                onChangeText={setUrl}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!discovering}
+              />
+              {url && (
+                <Text style={{ color: Colors.accent, fontSize: Typography.xs, marginBottom: Spacing.md }}>
+                  ✓ Server URL {discovering ? 'found' : 'configured'}
+                </Text>
+              )}
+
+              <TextInput
+                style={styles.nameInput}
+                placeholder="API Key"
+                placeholderTextColor="#999"
+                value={apiKey}
+                onChangeText={setApiKey}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+
+              {error && (
+                <Text style={{ color: '#FF6B6B', marginBottom: Spacing.md, fontSize: Typography.sm }}>
+                  {error}
+                </Text>
+              )}
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.createButton, (!url.trim() || !apiKey.trim() || loading) && styles.createButtonDisabled]}
+                  onPress={onImport}
+                  disabled={!url.trim() || !apiKey.trim() || loading}
+                >
+                  {loading ? (
+                    <Text style={styles.createButtonText}>Loading...</Text>
+                  ) : (
+                    <Text style={styles.createButtonText}>Import</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.modalTitle}>Select Profile</Text>
+              <Text style={styles.subtitle}>
+                Choose a profile to use on this device:
+              </Text>
+
+              <ScrollView style={{ maxHeight: 300, marginBottom: Spacing.lg }}>
+                {importedProfiles.map((profile) => (
+                  <TouchableOpacity
+                    key={profile.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: Spacing.md,
+                      marginBottom: Spacing.sm,
+                      backgroundColor: '#2a2a2a',
+                      borderRadius: Radius.md,
+                    }}
+                    onPress={() => onSelectProfile(profile)}
+                  >
+                    <View style={[styles.avatar, { backgroundColor: profile.color, width: 40, height: 40 }]}>
+                      {profile.avatar ? (
+                        <Image source={{ uri: profile.avatar }} style={{ width: 40, height: 40, borderRadius: 8 }} />
+                      ) : (
+                        <Text style={[styles.avatarText, { fontSize: 20 }]}>
+                          {profile.name.charAt(0).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={{ marginLeft: Spacing.md, color: '#fff', fontSize: Typography.md }}>
+                      {profile.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -643,5 +900,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: Typography.md,
     fontWeight: '600',
+  },
+  cloudProfileCard: {
+    alignItems: 'center',
+    width: 100,
+  },
+  cloudAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 2,
+    borderColor: Colors.accent,
+    borderStyle: 'dashed',
+  },
+  cloudProfileText: {
+    fontSize: Typography.sm,
+    color: Colors.accent,
+    textAlign: 'center',
   },
 });

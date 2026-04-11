@@ -44,6 +44,8 @@ interface ProfileContextValue {
   setSyncCredentials: (url: string, apiKey: string) => Promise<void>;
   syncProfiles: () => Promise<boolean>;
   lastSyncTime: number | null;
+  // Import from cloud (for initial setup on new devices)
+  importCloudProfiles: (url: string, apiKey: string) => Promise<{ success: boolean; profiles?: Profile[]; error?: string }>;
 }
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -354,6 +356,63 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     return profile;
   }, [createProfile]);
 
+  // Import profiles from cloud (for setup on new devices)
+  const importCloudProfiles = useCallback(async (url: string, apiKey: string): Promise<{ success: boolean; profiles?: Profile[]; error?: string }> => {
+    try {
+      // Get or create device ID
+      const did = await getOrCreateDeviceId();
+      
+      // Fetch profiles from cloud
+      const response = await fetch(`${url}/api/profiles/${did}`, {
+        headers: {
+          'Authorization': apiKey,
+        },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          return { success: false, error: 'No profiles found on server. Create a profile first on another device.' };
+        }
+        return { success: false, error: `Server error: ${response.status}` };
+      }
+      
+      const data = await response.json();
+      if (!data.found || !data.profiles || !data.profiles.profiles || data.profiles.profiles.length === 0) {
+        return { success: false, error: 'No profiles found on server.' };
+      }
+      
+      const serverProfiles: Profile[] = data.profiles.profiles;
+      const serverActiveId = data.profiles.activeProfileId;
+      
+      // Save profiles locally
+      await storage.setItem(PROFILES_KEY, JSON.stringify(serverProfiles));
+      setProfiles(serverProfiles);
+      
+      // Save sync credentials for future syncs
+      await storage.setItem(SYNC_SERVER_URL_KEY, url);
+      await storage.setItem(SYNC_API_KEY_KEY, apiKey);
+      setSyncServerUrl(url);
+      setSyncApiKey(apiKey);
+      
+      // Set active profile if server had one
+      if (serverActiveId) {
+        await storage.setItem(ACTIVE_PROFILE_KEY, serverActiveId);
+        const active = serverProfiles.find(p => p.id === serverActiveId);
+        if (active) {
+          setActiveProfile(active);
+        }
+      }
+      
+      setLastSyncTime(Date.now());
+      console.log('[ProfileSync] Imported from cloud:', serverProfiles.length, 'profiles');
+      
+      return { success: true, profiles: serverProfiles };
+    } catch (err: any) {
+      console.error('[ProfileSync] Import failed:', err);
+      return { success: false, error: err.message || 'Failed to connect to server' };
+    }
+  }, []);
+
   const value: ProfileContextValue = {
     profiles,
     activeProfile,
@@ -370,6 +429,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     setSyncCredentials,
     syncProfiles,
     lastSyncTime,
+    importCloudProfiles,
   };
 
   return (
