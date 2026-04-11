@@ -56,16 +56,25 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       
       // Load profiles
       const profilesJson = await storage.getItem(PROFILES_KEY);
+      console.log('[ProfileContext] Loaded profiles JSON:', profilesJson);
       let loadedProfiles: Profile[] = [];
       
       if (profilesJson) {
-        loadedProfiles = JSON.parse(profilesJson);
+        try {
+          loadedProfiles = JSON.parse(profilesJson);
+          console.log('[ProfileContext] Parsed profiles:', loadedProfiles.length);
+        } catch (parseErr) {
+          console.error('[ProfileContext] Error parsing profiles:', parseErr);
+        }
+      } else {
+        console.log('[ProfileContext] No profiles found in storage');
       }
       
       setProfiles(loadedProfiles);
       
       // Load active profile if exists
       const activeId = await storage.getItem(ACTIVE_PROFILE_KEY);
+      console.log('[ProfileContext] Active profile ID:', activeId);
       if (activeId) {
         const active = loadedProfiles.find(p => p.id === activeId);
         if (active) {
@@ -181,18 +190,18 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     // Create profile from legacy data
     const profile = await createProfile('Default', PROFILE_COLORS[0]);
     
-    // Migrate credentials
+    // Migrate credentials to GLOBAL keys (server credentials are shared across profiles)
     if (legacyKavitaUrl) {
-      await storage.setItem(getProfileStorageKey('kavita_url'), legacyKavitaUrl);
+      await storage.setItem('folio_kavita_server_url', legacyKavitaUrl);
     }
     if (legacyKavitaKey) {
-      await storage.setItem(getProfileStorageKey('kavita_api_key'), legacyKavitaKey);
+      await storage.setItem('folio_kavita_api_key', legacyKavitaKey);
     }
     if (legacyAbsUrl) {
-      await storage.setItem(getProfileStorageKey('abs_url'), legacyAbsUrl);
+      await storage.setItem('folio_abs_server_url', legacyAbsUrl);
     }
     if (legacyAbsToken) {
-      await storage.setItem(getProfileStorageKey('abs_token'), legacyAbsToken);
+      await storage.setItem('folio_abs_api_key', legacyAbsToken);
     }
     
     // Clear legacy keys
@@ -203,7 +212,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     
     setHasLegacyData(false);
     return profile;
-  }, [createProfile, getProfileStorageKey]);
+  }, [createProfile]);
 
   const value: ProfileContextValue = {
     profiles,
