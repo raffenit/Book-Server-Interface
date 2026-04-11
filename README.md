@@ -57,6 +57,7 @@ npx expo start
 ```
 
 Then:
+
 - **Physical device**: Scan the QR code with [Expo Go](https://expo.dev/go)
 - **Android emulator**: Press `a` in the terminal
 - **iOS simulator**: Press `i` in the terminal
@@ -64,7 +65,8 @@ Then:
 ### 4. Connect to your Kavita server
 
 On first launch, enter:
-- **Server URL**: e.g. `http://192.168.1.100:5000` or your Tailscale/domain URL
+
+- **Server URL**: e.g. `http://192.168.1.100:8050` or your Tailscale/domain URL
 - **API Key**: Found in Kavita → User Settings (⚙️ gear icon) → Security → API Key
 
 ---
