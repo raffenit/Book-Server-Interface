@@ -1,17 +1,20 @@
-# Book Server Interface
+# Folio
 
-A React PWA interface for:
-- Reading ebooks, PDFs, and comics from your self-hosted [Kavita](https://www.kavitareader.com/) server
-- Listening to audiobooks and podcasts from your self-hosted [AudioBookShelf](https://www.audiobookshelf.org/) server
+A unified React PWA for your self-hosted media libraries:
+- 📚 **Kavita** — Read ebooks, PDFs, and comics
+- 🎧 **Audiobookshelf** — Listen to audiobooks and podcasts
 
 ## Features
 
-- 📚 **Browse Libraries** — View all your Kavita libraries and series in a beautiful grid
-- 📖 **EPUB Reader** — Full epub.js-powered reader with dark/sepia/light themes, swipe to turn pages, and reading progress sync
-- 📄 **PDF Reader** — PDF.js-powered reader that renders all pages inline with smooth scrolling
-- 🔍 **Search** — Full-text search across all your Kavita series
-- 📊 **Reading Progress** — Progress synced back to your Kavita server in real-time
-- 🔐 **Secure Auth** — API key stored securely in device's secure enclave
+- 📚 **Dual Server Support** — Connect to both Kavita and Audiobookshelf simultaneously
+- 📖 **EPUB Reader** — epub.js-powered with themes, swipe navigation, and progress sync
+- 📄 **PDF Reader** — PDF.js with smooth scrolling and inline rendering
+- 🎧 **Audiobook Player** — Full-featured player with chapters, bookmarks, and playback speed
+- 🔍 **Search** — Full-text search across both servers
+- 📊 **Reading Progress** — Sync progress back to your servers in real-time
+- 🔗 **Series Matching** — Link audiobooks to their ebook series for quick switching
+- 🔐 **Secure Auth** — API keys stored in device's secure enclave
+- 🐳 **Docker Deployment** — Single container with built-in proxy for CORS-free access
 
 ## Screenshots
 
@@ -21,79 +24,53 @@ The app uses a dark amber/gold theme designed for comfortable reading sessions.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+
-- [Expo CLI](https://docs.expo.dev/get-started/installation/) (`npm install -g expo-cli`)
-- [Expo Go](https://expo.dev/go) app on your Android/iOS device **OR** Android Studio / Xcode for a full build
-- A running [Kavita server](https://www.kavitareader.com/) (v0.7+)
+- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
+- A running [Kavita](https://www.kavitareader.com/) server (optional)
+- A running [Audiobookshelf](https://www.audiobookshelf.org/) server (optional)
 
 ---
 
-## Setup
+## Setup (Docker - Recommended)
 
-### 1. Install dependencies
+### 1. Clone and configure
 
 ```bash
-cd kavita-reader
+git clone https://github.com/YOUR_USERNAME/Folio.git
+cd Folio
+```
+
+Create a `.env` file with your server URLs (optional - can also be configured in UI):
+
+```bash
+EXPO_PUBLIC_KAVITA_URL=http://your-kavita-ip:8050
+EXPO_PUBLIC_ABS_URL=http://your-abs-ip:81
+```
+
+### 2. Start the app
+
+```bash
+docker-compose up -d --build
+```
+
+Access at `http://localhost:3000` (or your server IP)
+
+### 3. Connect your servers
+
+Open Settings and configure:
+
+- **Kavita**: Server URL + API Key (from Kavita → User Settings → Security → API Key)
+- **Audiobookshelf**: Server URL + API Token (from ABS Settings → Users → Your User → API Token)
+
+---
+
+## Development Setup
+
+If you want to run outside Docker for development:
+
+```bash
+cd folio-reader
 npm install
-```
-
-### 2. Add placeholder assets
-
-You need three image files in the `assets/` folder before running:
-
-```bash
-# Quick way: copy any PNG as placeholders
-cp any-image.png assets/icon.png
-cp any-image.png assets/splash.png
-cp any-image.png assets/adaptive-icon.png
-```
-
-Or generate proper icons with a tool like [EasyAppIcon](https://easyappicon.com/).
-
-### 3. Start the development server
-
-```bash
 npx expo start
-```
-
-Then:
-
-- **Physical device**: Scan the QR code with [Expo Go](https://expo.dev/go)
-- **Android emulator**: Press `a` in the terminal
-- **iOS simulator**: Press `i` in the terminal
-
-### 4. Connect to your Kavita server
-
-On first launch, enter:
-
-- **Server URL**: e.g. `http://192.168.1.100:8050` or your Tailscale/domain URL
-- **API Key**: Found in Kavita → User Settings (⚙️ gear icon) → Security → API Key
-
----
-
-## Building a Release APK (Android)
-
-To build a standalone APK you can install directly:
-
-```bash
-# Install EAS CLI
-npm install -g eas-cli
-
-# Log in to Expo account (free)
-eas login
-
-# Configure the project
-eas build:configure
-
-# Build APK for Android
-eas build --platform android --profile preview
-```
-
-For a local build without Expo's servers:
-
-```bash
-# Requires Android Studio and Java 17 installed
-npx expo run:android
 ```
 
 ---
@@ -101,48 +78,68 @@ npx expo run:android
 ## Project Structure
 
 ```
-kavita-reader/
-├── app/
-│   ├── _layout.tsx          # Root layout with auth routing
-│   ├── (auth)/
-│   │   ├── _layout.tsx
-│   │   └── login.tsx        # Server URL + API key login screen
-│   ├── (tabs)/
-│   │   ├── _layout.tsx      # Bottom tab navigation
-│   │   ├── index.tsx        # Home (recently read + library overview)
-│   │   ├── libraries.tsx    # Browse all libraries & series
-│   │   ├── search.tsx       # Search across all series
-│   │   └── settings.tsx     # Server settings + disconnect
-│   ├── series/
-│   │   └── [id].tsx         # Series detail (volumes & chapters)
-│   └── reader/
-│       ├── pdf.tsx          # PDF reader (PDF.js via WebView)
-│       └── epub.tsx         # EPUB reader (epub.js via WebView)
-├── components/
-│   └── SeriesCard.tsx       # Grid card + list card components
-├── constants/
-│   └── theme.ts             # Colors, typography, spacing
-├── contexts/
-│   └── AuthContext.tsx      # Auth state + login/logout
-├── services/
-│   └── kavitaAPI.ts         # Full Kavita REST API client
-├── app.json                 # Expo config
-├── babel.config.js
-├── metro.config.js
-├── package.json
-└── tsconfig.json
+Folio/
+├── folio-reader/            # React Native / Expo app
+│   ├── app/
+│   │   ├── (tabs)/          # Main tabs: ebooks, audiobooks, search, settings
+│   │   ├── series/[id].tsx  # Series detail page
+│   │   ├── audiobook/[id].tsx # Audiobook player
+│   │   └── reader/          # EPUB and PDF readers
+│   ├── components/          # Reusable UI components
+│   ├── constants/           # Theme, colors, typography
+│   ├── contexts/            # Auth, Theme, Audio Player contexts
+│   ├── services/            # API clients
+│   │   ├── kavitaAPI.ts     # Kavita REST client
+│   │   ├── audiobookshelfAPI.ts # ABS REST client
+│   │   ├── LibraryProvider.ts     # Unified interface
+│   │   └── LibraryFactory.ts      # Provider factory
+│   ├── server.js            # Node.js proxy server (CORS handling)
+│   ├── deploy-webhook.js    # Auto-deploy webhook receiver
+│   ├── Dockerfile           # Main app container
+│   └── Dockerfile.deploy    # Deploy webhook container
+├── docker-compose.yml       # Main app orchestration
+├── docker-compose.deploy.yml # Deploy webhook orchestration
+└── nginx.conf               # Nginx config (fallback)
 ```
 
 ---
 
-## Kavita API Notes
+## API Architecture
 
-This app uses the **Kavita Plugin API** for authentication (`/api/Plugin/authenticate`), which accepts your API key and returns a JWT token used for all subsequent requests. This is the recommended approach for third-party clients.
+### Proxy Server
 
-Key endpoints used:
+Folio includes a built-in Node.js proxy server (`server.js`) that handles CORS and authentication headers when communicating with your self-hosted servers. This eliminates the need to configure CORS on Kavita or ABS directly.
+
+The proxy:
+- Forwards all `/api/*` requests to your configured servers
+- Adds proper CORS headers for browser access
+- Handles authentication token injection
+- Runs on port 3000 alongside the main app
+
+### Auto-Deploy Webhook (Optional)
+
+For automatic deployment on git push, start the deploy webhook:
+
+```bash
+# Set a secret for webhook security
+export DEPLOY_SECRET="your-secret-here"
+
+# Start the webhook receiver
+docker-compose -f docker-compose.deploy.yml up -d --build
+```
+
+Then add a GitHub webhook:
+- **URL**: `http://YOUR_SERVER_IP:9000/deploy`
+- **Secret**: Same as `DEPLOY_SECRET`
+- **Events**: Push to main branch
+
+### Kavita API
+
+Uses the **Kavita Plugin API** for authentication.
+
 | Endpoint | Purpose |
-|---|---|
-| `POST /api/Plugin/authenticate` | Get JWT token from API key |
+|----------|---------|
+| `GET /api/Plugin/authenticate` | Get JWT token from API key |
 | `GET /api/Library` | List all libraries |
 | `POST /api/Series/all` | Paginated series list |
 | `GET /api/Series/{id}` | Series metadata |
@@ -152,25 +149,45 @@ Key endpoints used:
 | `GET /api/Reader/epub` | Stream EPUB file |
 | `GET /api/Search/search` | Full-text search |
 
+### Audiobookshelf API
+
+Uses Bearer token authentication with API tokens.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/libraries` | List all libraries |
+| `GET /api/libraries/{id}/items` | Library items |
+| `GET /api/items/{id}` | Item details |
+| `GET /api/items/{id}/playback-session` | Start playback session |
+| `POST /api/session/{id}/sync` | Sync progress |
+| `GET /api/collections` | User collections |
+
 ---
 
 ## Troubleshooting
 
 **"Could not reach server"**
-- Make sure your phone and server are on the same network (or use Tailscale/VPN)
-- Try the IP address directly instead of a hostname
-- Check that Kavita is running and accessible from a browser
+- Check that the server URL is correct in Settings
+- Ensure the built-in proxy is running (check `docker logs folio-reader`)
+- Verify your server is accessible from the Docker host
+- Try using IP address instead of hostname
 
-**"Invalid API key"**
-- Navigate to Kavita → click your avatar → User Settings → Security
-- Copy the full API key (it's a long string)
+**"Invalid API key / Token"**
+- **Kavita**: User Settings → Security → API Key
+- **Audiobookshelf**: Settings → Users → Your User → API Token
 
-**EPUB not loading**
-- epub.js fetches the file via XHR with an Authorization header from inside a WebView
-- Some older Kavita versions may have CORS restrictions — ensure your Kavita is v0.7+
+**CORS errors in browser**
+- This should be handled by the built-in proxy automatically
+- If you see CORS errors, the proxy may not be running. Check: `docker ps | grep folio`
 
-**PDF renders blank**
-- Verify the PDF URL works in a browser: `http://YOUR_SERVER/api/Reader/pdf?chapterId=X&apiKey=YOUR_KEY`
+**Audiobooks not loading**
+- Verify ABS is running and the library scan is complete
+- Check browser dev tools for API errors
+- Ensure your ABS API token has proper permissions
+
+**EPUB/PDF not loading**
+- Check that the file format is supported by your Kavita server
+- Verify the chapter/file ID is correct in the URL
 
 ---
 
@@ -178,10 +195,14 @@ Key endpoints used:
 
 - **React Native** + **Expo** (SDK 51)
 - **Expo Router** (file-based navigation)
-- **epub.js** (EPUB rendering via WebView)
-- **PDF.js** (PDF rendering via WebView)
-- **expo-secure-store** (secure API key storage)
+- **Node.js** proxy server (CORS handling)
+- **epub.js** (EPUB rendering)
+- **PDF.js** (PDF rendering)
+- **react-native-track-player** (audio playback)
+- **expo-secure-store** (secure credential storage)
+- **Axios** (HTTP client)
 - **TypeScript** throughout
+- **Docker** + Docker Compose (deployment)
 
 ---
 
