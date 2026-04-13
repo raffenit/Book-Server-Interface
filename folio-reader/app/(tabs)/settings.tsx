@@ -408,6 +408,23 @@ function CloudSyncSection() {
               onPress={handleSync}
               loading={syncing}
             />
+            <View style={styles.divider} />
+            <SettingRow
+              icon="bug-outline"
+              label="Debug: View Stored Values"
+              value="Tap to log"
+              onPress={async () => {
+                const allKeys = await storage.getAllKeys();
+                const syncKeys = allKeys.filter(k => k.includes('sync') || k.includes('folio_'));
+                console.log('[Settings Debug] All keys:', allKeys);
+                console.log('[Settings Debug] Sync-related keys:', syncKeys);
+                for (const key of syncKeys) {
+                  const val = await storage.getItem(key);
+                  console.log(`[Settings Debug] ${key}:`, val?.substring(0, 50));
+                }
+                alert(`Found ${syncKeys.length} sync keys. Check console for details.`);
+              }}
+            />
           </>
         )}
       </View>
