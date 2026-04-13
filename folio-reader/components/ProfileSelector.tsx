@@ -91,7 +91,7 @@ interface ProfileSelectorProps {
 }
 
 export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelectorProps) {
-  const { profiles, loading, hasLegacyData, migrateLegacyData, createProfile, selectProfile, updateProfile, deleteProfile, importCloudProfiles } = useProfile();
+  const { profiles, loading, hasLegacyData, migrateLegacyData, createProfile, selectProfile, updateProfile, deleteProfile, importCloudProfiles, syncApiKey, syncServerUrl } = useProfile();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PROFILE_COLORS[0]);
@@ -295,7 +295,12 @@ export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelect
         {profiles.length === 0 && (
           <TouchableOpacity
             style={styles.cloudProfileCard}
-            onPress={() => setShowCloudModal(true)}
+            onPress={() => {
+              // Pre-fill with stored credentials if available
+              setCloudUrl(syncServerUrl || '');
+              setCloudApiKey(syncApiKey || '');
+              setShowCloudModal(true);
+            }}
             activeOpacity={0.8}
           >
             <View style={styles.cloudAvatar}>
