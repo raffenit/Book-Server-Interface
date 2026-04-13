@@ -136,10 +136,22 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   // Cloud sync functions
   const setSyncCredentials = async (url: string, apiKey: string) => {
-    await storage.setItem(SYNC_SERVER_URL_KEY, url);
-    await storage.setItem(SYNC_API_KEY_KEY, apiKey);
-    setSyncServerUrl(url);
-    setSyncApiKey(apiKey);
+    console.log('[ProfileContext] Saving sync credentials...', { url, apiKeyPrefix: apiKey.substring(0, 4) + '...' });
+    try {
+      await storage.setItem(SYNC_SERVER_URL_KEY, url);
+      await storage.setItem(SYNC_API_KEY_KEY, apiKey);
+      setSyncServerUrl(url);
+      setSyncApiKey(apiKey);
+      console.log('[ProfileContext] Credentials saved successfully');
+      
+      // Verify they were saved
+      const savedUrl = await storage.getItem(SYNC_SERVER_URL_KEY);
+      const savedKey = await storage.getItem(SYNC_API_KEY_KEY);
+      console.log('[ProfileContext] Verified saved:', { url: savedUrl, keyPrefix: savedKey?.substring(0, 4) + '...' });
+    } catch (err) {
+      console.error('[ProfileContext] Failed to save credentials:', err);
+      throw err;
+    }
   };
 
   const syncToCloud = async (did: string, url: string, key: string): Promise<boolean> => {

@@ -46,9 +46,15 @@ export default function LoginScreen() {
       >
         {!profileLoading && (
           <ProfileSelector 
-            onSelectProfile={() => {
-              console.log('[Login] Profile selected, navigating to app');
-              router.replace('/(tabs)');
+            onSelectProfile={(profile) => {
+              console.log('[Login] Profile selected:', profile?.id, profile?.name);
+              console.log('[Login] Navigating to /(tabs)');
+              try {
+                router.replace('/(tabs)');
+                console.log('[Login] Navigation called successfully');
+              } catch (err) {
+                console.error('[Login] Navigation failed:', err);
+              }
             }}
           />
         )}

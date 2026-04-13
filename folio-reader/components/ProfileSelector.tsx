@@ -121,11 +121,15 @@ export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelect
 
   const handleCreateProfile = async () => {
     if (!newProfileName.trim()) return;
+    console.log('[ProfileSelector] Creating profile...');
     const profile = await createProfile(newProfileName.trim(), selectedColor, newAvatar || undefined);
+    console.log('[ProfileSelector] Profile created:', profile.id);
     setShowAddModal(false);
     setNewProfileName('');
     setNewAvatar(null);
+    console.log('[ProfileSelector] Calling onSelectProfile');
     onSelectProfile(profile);
+    console.log('[ProfileSelector] onSelectProfile called');
   };
 
   const handleSelectProfile = async (profile: Profile) => {
