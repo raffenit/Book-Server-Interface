@@ -82,7 +82,7 @@ export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }:
       delayLongPress={400}
       activeOpacity={0.8}
     >
-      <View style={[styles.coverContainer, { backgroundColor: colors.surface }]}>
+      <View style={[styles.coverContainer, { backgroundColor: Platform.OS === 'web' ? 'rgba(12, 14, 28, 0.4)' : colors.surface, backdropFilter: Platform.OS === 'web' ? 'blur(8px)' : undefined } as any]}>
         <Image
           source={{ uri: coverUrl }}
           style={styles.cover}

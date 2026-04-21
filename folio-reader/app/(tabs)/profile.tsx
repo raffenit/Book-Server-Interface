@@ -123,25 +123,37 @@ export default function ProfileScreen() {
 
   if (!activeProfile) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+      <View style={{
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: Platform.OS === 'web' ? 'rgba(5, 6, 15, 0.15)' : colors.background,
+        backdropFilter: Platform.OS === 'web' ? 'blur(4px)' : undefined,
+      } as any}>
         <Text style={{ color: colors.textSecondary }}>No profile selected</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{
+      flex: 1,
+      backgroundColor: Platform.OS === 'web' ? 'rgba(5, 6, 15, 0.15)' : colors.background,
+      backdropFilter: Platform.OS === 'web' ? 'blur(4px)' : undefined,
+    } as any}>
       <TabHeader title="Profile" />
       
       {/* Profile Header Card */}
       <View style={{
-        backgroundColor: colors.surface,
+        backgroundColor: 'rgba(30, 33, 50, 0.5)',
         margin: Spacing.md,
         borderRadius: Radius.lg,
         padding: Spacing.lg,
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.md,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
       }}>
         {/* Avatar */}
         <TouchableOpacity onPress={openEditModal} activeOpacity={0.8}>
@@ -204,8 +216,10 @@ export default function ProfileScreen() {
           onPress={() => setSwitchModalVisible(true)}
           style={{
             padding: Spacing.sm,
-            backgroundColor: colors.surfaceElevated,
+            backgroundColor: 'rgba(45, 48, 70, 0.6)',
             borderRadius: Radius.md,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.1)',
           }}
         >
           <Ionicons name="swap-horizontal" size={24} color={colors.accent} />

@@ -115,7 +115,7 @@ export default function CollectionsScreen() {
 
   if (collections.length === 0) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: Colors.background }]}>
         <View style={styles.screenHeader}>
           <Text style={styles.screenTitle}>Collections</Text>
         </View>
@@ -131,7 +131,7 @@ export default function CollectionsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: Colors.background }]}>
       <View style={styles.screenHeader}>
         <Text style={styles.screenTitle}>Collections</Text>
       </View>
@@ -236,11 +236,10 @@ export default function CollectionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   centered: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.md,

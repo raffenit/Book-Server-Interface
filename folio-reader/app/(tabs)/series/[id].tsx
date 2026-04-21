@@ -453,8 +453,8 @@ export default function SeriesDetailScreen() {
 
 function makeStyles(c: ColorScheme) {
   return {
-    container: { flex: 1, backgroundColor: c.background },
-    centered: { flex: 1, backgroundColor: c.background, justifyContent: 'center' as const, alignItems: 'center' as const, gap: Spacing.md },
+    container: { flex: 1, backgroundColor: 'transparent' },
+    centered: { flex: 1, backgroundColor: 'transparent', justifyContent: 'center' as const, alignItems: 'center' as const, gap: Spacing.md },
     scroll: { paddingBottom: 60 },
     header: { flexDirection: 'row' as const, alignItems: 'center' as const, padding: 10, paddingTop: 48, borderBottomWidth: 1, borderBottomColor: c.border },
     headerTitle: { color: c.textPrimary, textAlign: 'center' as const, fontWeight: 'bold' as const, fontSize: 14, flex: 1 },
@@ -462,7 +462,7 @@ function makeStyles(c: ColorScheme) {
     heroRow: { flexDirection: 'row' as const, paddingTop: Spacing.xl, paddingHorizontal: Spacing.xl, gap: Spacing.xl, alignItems: 'flex-start' as const },
     coverSidebarWrap: { width: 200, borderRadius: Radius.md, overflow: 'hidden' as const, flexShrink: 0, position: 'relative' as const },
     coverSidebar: { width: 200, height: 280, borderRadius: Radius.md },
-    coverSmallWrap: { width: '100%', alignItems: 'center' as const, paddingTop: Spacing.lg, paddingBottom: Spacing.lg, backgroundColor: c.surface, position: 'relative' as const },
+    coverSmallWrap: { width: '100%', alignItems: 'center' as const, paddingTop: Spacing.lg, paddingBottom: Spacing.lg, backgroundColor: c.surface + '88', position: 'relative' as const },
     coverSmall: { width: 140, height: 200, borderRadius: Radius.md },
     coverEditOverlay: { position: 'absolute' as const, bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: Radius.full, width: 28, height: 28, justifyContent: 'center' as const, alignItems: 'center' as const },
     metaBlock: { padding: Spacing.base, paddingTop: Spacing.md, gap: Spacing.md },

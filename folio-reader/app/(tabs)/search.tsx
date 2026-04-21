@@ -7,6 +7,7 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LibraryFactory } from '../../services/LibraryFactory';
@@ -65,12 +66,20 @@ export default function SearchScreen() {
     setSearched(false);
   }
 
-  const handleOpenMenu = (seriesId: string | number, seriesName: string, x: number, y: number) => {
-    openMenu(seriesId, seriesName, x, y);
+  const handleOpenMenu = (seriesId: string | number, seriesName: string, x: number, y: number, provider: 'kavita' | 'abs' = 'kavita') => {
+    // Convert string IDs to numbers for Kavita, keep as-is for ABS
+    const normalizedId = provider === 'kavita' && typeof seriesId === 'string' 
+      ? parseInt(seriesId, 10) 
+      : seriesId;
+    if (normalizedId === null || normalizedId === undefined || normalizedId === '') return;
+    openMenu(normalizedId, seriesName, x, y, provider);
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {
+      backgroundColor: Platform.OS === 'web' ? 'rgba(5, 6, 15, 0.65)' : colors.background,
+      backdropFilter: Platform.OS === 'web' ? 'blur(12px) saturate(150%)' : undefined,
+    } as any]}>
       <TabHeader 
         title="Search" 
         count={searched ? results.length : undefined} 
@@ -84,7 +93,7 @@ export default function SearchScreen() {
             style={[styles.input, { color: colors.textPrimary }]}
             value={query}
             onChangeText={onChangeText}
-            placeholder="Search series, titles, authors…"
+            placeholder="Search titles, authors, genres…"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             returnKeyType="search"

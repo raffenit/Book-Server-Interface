@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { kavitaAPI, Series, Genre, Tag } from '../../services/kavitaAPI';
+import { kavitaAPI, Series, Genre, Tag, Collection } from '../../services/kavitaAPI';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { SeriesCard, useGridColumns } from '../../components/SeriesCard';
@@ -64,7 +64,9 @@ function ContinueCard({ series, onPress, onContextMenu }: {
         marginRight: Spacing.md,
         borderRadius: Radius.md,
         overflow: 'hidden',
-        backgroundColor: colors.surface,
+        backgroundColor: '#1e2132',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
       }}
     >
       <View style={{ aspectRatio: 0.67, width: '100%' }}>
@@ -115,57 +117,92 @@ function FilterRow<T extends { id: number; title?: string; label?: string; name?
   onCreateChip?: () => void;
 }) {
   const { colors } = useTheme();
+  const filterRowRef = React.useRef<View>(null);
+  const [dividerWidth, setDividerWidth] = React.useState(0);
+
+  React.useEffect(() => {
+    if (Platform.OS === 'web' && filterRowRef.current) {
+      const el = filterRowRef.current as any as HTMLElement;
+      setDividerWidth(el.getBoundingClientRect().width);
+    }
+  }, []);
+
   return (
-    <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm, gap: Spacing.xs }}
-      >
-        <Text style={{ fontSize: Typography.xs, fontWeight: Typography.bold, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginRight: Spacing.xs, minWidth: 48 }}>
-          {label}
-        </Text>
-        <TouchableOpacity
-          style={[
-            { backgroundColor: colors.surface, borderRadius: Radius.full, paddingHorizontal: Spacing.md, paddingVertical: 5, borderWidth: 1, borderColor: colors.border },
-            selectedId === null && { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-          ]}
-          onPress={() => onSelect(null)}
-          activeOpacity={0.75}
-        >
-          <Text style={[
-            { fontSize: Typography.sm, color: colors.textSecondary, fontWeight: Typography.medium },
-            selectedId === null && { color: colors.accent, fontWeight: Typography.semibold },
-          ]}>All</Text>
-        </TouchableOpacity>
-        {items.map(item => {
-          const name = (item as any).title ?? (item as any).label ?? (item as any).name ?? '';
-          const active = selectedId === item.id;
-          return (
-            <ChipWithContextMenu
-              key={item.id}
-              active={active}
-              name={name}
-              colors={colors}
-              onPress={() => onSelect(active ? null : item.id)}
-              onContextMenu={onChipContextMenu ? (x, y) => onChipContextMenu(item, x, y) : undefined}
-            />
-          );
-        })}
-        {onCreateChip && (
-          <TouchableOpacity
-            style={{ width: 28, height: 28, borderRadius: Radius.full, borderWidth: 1.5, borderColor: colors.borderLight, borderStyle: 'dashed' as any, justifyContent: 'center', alignItems: 'center' }}
-            onPress={onCreateChip}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="add" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
+    <View ref={filterRowRef} style={{ position: 'relative' }}>
+      {/* Gradient divider line */}
+      {Platform.OS === 'web' && (
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          background: `radial-gradient(ellipse at center, ${colors.accent}50 0%, ${colors.secondary}55 25%, #8B6DB8 50%, #A85A95 75%, ${colors.secondary}65 100%)`,
+        }} />
+      )}
+      {Platform.OS !== 'web' && <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, backgroundColor: colors.border }} />}
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {/* Fixed label - doesn't scroll */}
+        {Platform.OS === 'web' ? (
+          <span style={{
+            fontSize: Typography.xs,
+            fontWeight: Typography.bold,
+            textTransform: 'uppercase',
+            letterSpacing: 0.8,
+            marginLeft: Spacing.base,
+            marginRight: Spacing.xs,
+            minWidth: 48,
+            background: `radial-gradient(circle at 30% 30%, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>{label}</span>
+        ) : (
+          <Text style={{ fontSize: Typography.xs, fontWeight: Typography.bold, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginLeft: Spacing.base, marginRight: Spacing.xs, minWidth: 48 }}>
+            {label}
+          </Text>
         )}
-      </ScrollView>
+        {/* Scrollable chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', paddingRight: Spacing.base, paddingVertical: Spacing.md, gap: Spacing.xs }}
+        >
+          <GradientChip
+            label="All"
+            active={selectedId === null}
+            colors={colors}
+            onPress={() => onSelect(null)}
+          />
+          {items.map(item => {
+            const name = (item as any).title ?? (item as any).label ?? (item as any).name ?? '';
+            const active = selectedId === item.id;
+            return (
+              <GradientChip
+                key={item.id}
+                label={name}
+                active={active}
+                colors={colors}
+                onPress={() => onSelect(active ? null : item.id)}
+                onContextMenu={onChipContextMenu ? (x, y) => onChipContextMenu(item, x, y) : undefined}
+              />
+            );
+          })}
+          {onCreateChip && (
+            <TouchableOpacity
+              style={{ width: 28, height: 28, borderRadius: Radius.full, borderWidth: 1.5, borderColor: colors.accent, borderStyle: 'dashed' as any, justifyContent: 'center', alignItems: 'center', backgroundColor: `${colors.accent}15` }}
+              onPress={onCreateChip}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="add" size={16} color={colors.accent} />
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
-function ChipWithContextMenu({ active, name, colors, onPress, onContextMenu }: {
-  active: boolean; name: string; colors: any;
+function GradientChip({ label, active, colors, onPress, onContextMenu }: {
+  label: string; active: boolean; colors: any;
   onPress: () => void; onContextMenu?: (x: number, y: number) => void;
 }) {
   const ref = React.useRef<any>(null);
@@ -178,22 +215,69 @@ function ChipWithContextMenu({ active, name, colors, onPress, onContextMenu }: {
     return () => el.removeEventListener('contextmenu', handler);
   }, [onContextMenu]);
 
+  // Random gradient angle for each chip (persists across renders via useMemo)
+  const gradientAngle = React.useMemo(() => {
+    return 120 + Math.random() * 120; // 120° to 240° (diagonal range)
+  }, []);
+
+  // Use same gradient colors as dividers/labels for border and text - green to blue to purple to red-purple (linear)
+  const gradientBorder = `linear-gradient(${gradientAngle.toFixed(1)}deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)`;
+  const textGradient = `linear-gradient(${gradientAngle.toFixed(1)}deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)`;
+
+  if (Platform.OS === 'web') {
+    return (
+      <TouchableOpacity
+        ref={ref}
+        onPress={onPress}
+        onLongPress={onContextMenu ? (e: GestureResponderEvent) => onContextMenu(e.nativeEvent.pageX, e.nativeEvent.pageY) : undefined}
+        delayLongPress={400}
+        activeOpacity={1}
+        style={{
+          borderRadius: Radius.full,
+          padding: 1, // Space for gradient border
+          background: gradientBorder,
+        } as any}
+      >
+        <View style={{
+          borderRadius: Radius.full,
+          paddingHorizontal: Spacing.md,
+          paddingVertical: 5,
+          backgroundColor: active ? 'transparent' : 'rgba(10, 12, 25, 0.85)',
+          background: active ? textGradient : undefined,
+        }}>
+          <span style={{
+            fontSize: Typography.sm,
+            fontWeight: active ? Typography.semibold : Typography.medium,
+            color: active ? '#1a1a2e' : 'transparent',
+            background: active ? 'none' : textGradient,
+            WebkitBackgroundClip: active ? 'border-box' : 'text',
+            WebkitTextFillColor: active ? '#1a1a2e' : 'transparent',
+            backgroundClip: active ? 'border-box' : 'text',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            cursor: 'default',
+          }}>{label}</span>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  // Fallback for native
   return (
     <TouchableOpacity
       ref={ref}
       style={[
-        { backgroundColor: colors.surface, borderRadius: Radius.full, paddingHorizontal: Spacing.md, paddingVertical: 5, borderWidth: 1, borderColor: colors.border },
-        active && { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+        { backgroundColor: 'rgba(10, 12, 25, 0.85)', borderRadius: Radius.full, paddingHorizontal: Spacing.md, paddingVertical: 5, borderWidth: 1, borderColor: active ? '#F5E6D3' : colors.border },
+        active && { backgroundColor: 'rgba(245, 230, 211, 0.95)', borderColor: '#F5E6D3' },
       ]}
       onPress={onPress}
       onLongPress={onContextMenu ? (e: GestureResponderEvent) => onContextMenu(e.nativeEvent.pageX, e.nativeEvent.pageY) : undefined}
       delayLongPress={400}
-      activeOpacity={0.75}
+      activeOpacity={1}
     >
       <Text style={[
-        { fontSize: Typography.sm, color: colors.textSecondary, fontWeight: Typography.medium },
-        active && { color: colors.accent, fontWeight: Typography.semibold },
-      ]}>{name}</Text>
+        { fontSize: Typography.sm, color: active ? '#1a1a2e' : colors.textSecondary, fontWeight: active ? Typography.semibold : Typography.medium },
+      ]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -205,7 +289,7 @@ function CreateChipModal({ visible, type, allSeries, onClose, onCreated }: {
   type: ChipType;
   allSeries: Series[];
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (name: string) => void;
 }) {
   const { colors } = useTheme();
   const [name, setName] = useState('');
@@ -242,7 +326,7 @@ function CreateChipModal({ visible, type, allSeries, onClose, onCreated }: {
         meta.tags = [...meta.tags, { id: 0, title: trimmed }];
       }
       await kavitaAPI.updateSeriesMetadata(meta);
-      onCreated();
+      onCreated(trimmed);
       handleClose();
     } catch (e: any) {
       setError(e?.message ?? 'Something went wrong.');
@@ -348,7 +432,7 @@ function SetupPrompt() {
   const router = useRouter();
   const { colors, uiAnimationsEnabled } = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, paddingBottom: 60 }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, paddingBottom: 60 }}>
       <Animated.View 
         entering={uiAnimationsEnabled ? FadeInDown.delay(100).springify() : undefined}
         style={{ alignItems: 'center' }}
@@ -424,9 +508,13 @@ export default function HomeScreen() {
 
   const [genres, setGenres] = useState<Genre[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [authors, setAuthors] = useState<{ id: number; title: string }[]>([]);
 
   const [selectedGenreId, setSelectedGenreId] = useState<number | null>(null);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(null);
+  const [selectedAuthorId, setSelectedAuthorId] = useState<number | null>(null);
 
   const [recentSeries, setRecentSeries] = useState<Series[]>([]);
   const [series, setSeries] = useState<Series[]>([]);
@@ -438,14 +526,55 @@ export default function HomeScreen() {
 
   const [libraries, setLibraries] = useState<any[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<number | null>(null);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
-  const filterKey = `${selectedGenreId}|${selectedTagId}|${selectedLibraryId}`;
+  const filterKey = `${selectedGenreId}|${selectedTagId}|${selectedCollectionId}|${selectedAuthorId}|${selectedLibraryId}`;
   const prevFilterKey = useRef(filterKey);
+  const flatListRef = useRef<FlatList<Series> | null>(null);
+  const scrollPositionRef = useRef(0);
 
-  const fetchMetadata = useCallback(() => {
+  // Helper to filter items in parallel batches (much faster than sequential)
+  const filterWithSeries = async <T extends { id: number }>(
+    items: T[],
+    fetcher: (id: number) => Promise<{ length: number }>
+  ): Promise<T[]> => {
+    const batchSize = 8; // Check 8 items in parallel
+    const results: (T | null)[] = [];
+    
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(async (item) => {
+          try {
+            const series = await fetcher(item.id);
+            return series.length > 0 ? item : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+      results.push(...batchResults);
+    }
+    
+    return results.filter((item): item is T => item !== null);
+  };
+
+  const fetchMetadata = useCallback(async () => {
     // Fire each request independently so each section renders as soon as its own data arrives
-    kavitaAPI.getGenres().then(setGenres).catch(() => {});
-    kavitaAPI.getTags().then(setTags).catch(() => {});
+    // Filter genres and tags in parallel batches to remove empty ones (fast but accurate)
+    try {
+      const allGenres = await kavitaAPI.getGenres();
+      const genresWithSeries = await filterWithSeries(allGenres, (id) => kavitaAPI.getSeriesByGenre(id, 0, 1));
+      setGenres(genresWithSeries);
+    } catch {}
+
+    try {
+      const allTags = await kavitaAPI.getTags();
+      const tagsWithSeries = await filterWithSeries(allTags, (id) => kavitaAPI.getSeriesByTag(id, 0, 1));
+      setTags(tagsWithSeries);
+    } catch {}
+
+    kavitaAPI.getCollections().then(setCollections).catch(() => {});
     kavitaAPI.getOnDeckSeries()
       .then(value => {
         const arr: any[] = Array.isArray(value) ? value : (value as any)?.items ?? [];
@@ -476,7 +605,18 @@ export default function HomeScreen() {
     try {
       const pageSize = 30;
       let raw: Series[] = [];
-      if (selectedGenreId !== null) {
+      if (selectedCollectionId !== null) {
+        // Collections don't support pagination in the same way, so we fetch all and slice
+        raw = await kavitaAPI.getSeriesForCollection(selectedCollectionId);
+        // For collections, we don't support pagination - return all results at once
+        if (reset) {
+          setSeries(raw);
+          setHasMore(false);
+          setPage(0);
+        }
+        setSeriesLoading(false);
+        return;
+      } else if (selectedGenreId !== null) {
         raw = await kavitaAPI.getSeriesByGenre(selectedGenreId, pageNum, pageSize);
       } else if (selectedTagId !== null) {
         raw = await kavitaAPI.getSeriesByTag(selectedTagId, pageNum, pageSize);
@@ -516,10 +656,19 @@ export default function HomeScreen() {
   useEffect(() => {
     if (filterKey === prevFilterKey.current) return;
     prevFilterKey.current = filterKey;
+    // Save scroll position before clearing data
+    const currentScroll = scrollPositionRef.current;
     setSeries([]);
     setPage(0);
     setHasMore(true);
-    fetchSeries(0, true);
+    fetchSeries(0, true).then(() => {
+      // Restore scroll position after data loads
+      setTimeout(() => {
+        if (flatListRef.current && currentScroll > 0) {
+          flatListRef.current.scrollToOffset({ offset: currentScroll, animated: false });
+        }
+      }, 100);
+    });
   }, [filterKey]);
 
   const onRefresh = () => {
@@ -528,16 +677,56 @@ export default function HomeScreen() {
     fetchSeries(0, true);
   };
 
+  // Extract authors from loaded series metadata
+  useEffect(() => {
+    const extractAuthorsFromSeries = async () => {
+      if (series.length === 0) return;
+      
+      const authorMap = new Map<number, string>();
+      
+      // Fetch metadata for series to extract writers
+      // Process in batches to avoid too many concurrent requests
+      const batchSize = 5;
+      for (let i = 0; i < series.length; i += batchSize) {
+        const batch = series.slice(i, i + batchSize);
+        await Promise.all(
+          batch.map(async (s) => {
+            try {
+              const metadata = await kavitaAPI.getSeriesMetadata(s.id);
+              if (metadata?.writers) {
+                metadata.writers.forEach(writer => {
+                  if (writer.id && writer.name && !authorMap.has(writer.id)) {
+                    authorMap.set(writer.id, writer.name);
+                  }
+                });
+              }
+            } catch {
+              // Skip series with no metadata
+            }
+          })
+        );
+      }
+      
+      const authorItems = Array.from(authorMap.entries())
+        .map(([id, title]) => ({ id, title }))
+        .sort((a, b) => a.title.localeCompare(b.title));
+      
+      setAuthors(authorItems);
+    };
+    
+    extractAuthorsFromSeries();
+  }, [series]);
+
   function loadMore() {
     if (!hasMore || seriesLoading) return;
     fetchSeries(page + 1, false);
   }
 
-  const hasActiveFilter = selectedGenreId !== null || selectedTagId !== null;
+  const hasActiveFilter = selectedGenreId !== null || selectedTagId !== null || selectedCollectionId !== null || selectedAuthorId !== null;
 
   if (authLoading || loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
@@ -548,7 +737,15 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{
+      flex: 1,
+      zIndex: 1,
+      backgroundColor: Platform.OS === 'web' ? 'rgba(5, 6, 15, 0.25)' : colors.background,
+      ...(Platform.OS === 'web' ? {
+        backdropFilter: 'blur(8px) saturate(120%)',
+        WebkitBackdropFilter: 'blur(8px) saturate(120%)',
+      } : {}),
+    } as any}>
       <PWAInstallBanner />
       <TabHeader 
         title="Ebooks" 
@@ -562,20 +759,23 @@ export default function HomeScreen() {
       />
       
       <FlatList
+        ref={flatListRef}
         key={numColumns}
         data={series}
         keyExtractor={(item) => item.id.toString()}
         numColumns={numColumns}
-        contentContainerStyle={{ paddingBottom: 40, backgroundColor: colors.background }}
+        contentContainerStyle={{ paddingBottom: 40, backgroundColor: 'transparent' }}
         columnWrapperStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.sm, marginBottom: Spacing.sm }}
+        onScroll={(e) => { scrollPositionRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={100}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
         ListHeaderComponent={
           <View>
-            {recentSeries.length > 0 && !hasActiveFilter && (
+            {recentSeries.length > 0 && (
               <View style={{ marginBottom: Spacing.xl }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.base, marginBottom: Spacing.md }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, marginBottom: Spacing.md, gap: Spacing.sm }}>
                   <Text style={{ fontSize: Typography.md, fontWeight: Typography.bold, color: colors.textPrimary }}>
                     Continue Reading
                   </Text>
@@ -599,30 +799,39 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {/* ── Divider + "All Series" label ── */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, marginBottom: Spacing.md, gap: Spacing.md }}>
-              <Text style={{ fontSize: Typography.sm, fontWeight: Typography.bold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                All Series
+            {/* ── Divider + "Filters" label with toggle ── */}
+            <TouchableOpacity 
+              onPress={() => setFiltersExpanded(!filtersExpanded)}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, marginBottom: filtersExpanded ? Spacing.md : Spacing.sm, gap: Spacing.md }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: Typography.base, fontWeight: Typography.bold, color: colors.accent, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Filters
               </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-            </View>
+              <View style={{ flex: 1, height: 2, backgroundColor: colors.accent, opacity: 0.3, borderRadius: 1 }} />
+              <Ionicons name={filtersExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.accent} />
+            </TouchableOpacity>
 
             {/* ── Filter rows ── */}
-            <View style={{ marginBottom: Spacing.md, gap: 6 }}>
-              <FilterRow label="Genre" items={genres} selectedId={selectedGenreId} onSelect={setSelectedGenreId}
-                onChipContextMenu={(item, x, y) => openChipMenu(item, 'genre', x, y)}
-                onCreateChip={() => setCreateChipModal({ visible: true, type: 'genre' })} />
-              <FilterRow label="Tag" items={tags} selectedId={selectedTagId} onSelect={setSelectedTagId}
-                onChipContextMenu={(item, x, y) => openChipMenu(item, 'tag', x, y)}
-                onCreateChip={() => setCreateChipModal({ visible: true, type: 'tag' })} />
-            </View>
+            {filtersExpanded && (
+              <View style={{ marginBottom: Spacing.md, gap: 6 }}>
+                <FilterRow label="Genre" items={genres} selectedId={selectedGenreId} onSelect={setSelectedGenreId}
+                  onChipContextMenu={(item, x, y) => openChipMenu(item, 'genre', x, y)}
+                  onCreateChip={() => setCreateChipModal({ visible: true, type: 'genre' })} />
+                <FilterRow label="Author" items={authors} selectedId={selectedAuthorId} onSelect={setSelectedAuthorId} />
+                <FilterRow label="Tag" items={tags} selectedId={selectedTagId} onSelect={setSelectedTagId}
+                  onChipContextMenu={(item, x, y) => openChipMenu(item, 'tag', x, y)}
+                  onCreateChip={() => setCreateChipModal({ visible: true, type: 'tag' })} />
+                <FilterRow label="Collection" items={collections} selectedId={selectedCollectionId} onSelect={setSelectedCollectionId} />
+              </View>
+            )}
 
             {hasActiveFilter && (
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.base, paddingBottom: Spacing.md, paddingTop: Spacing.xs }}>
                 <Text style={{ fontSize: Typography.sm, color: colors.textMuted }}>
                   {series.length}{hasMore ? '+' : ''} result{series.length !== 1 ? 's' : ''}{seriesLoading ? '…' : ''}
                 </Text>
-                <TouchableOpacity onPress={() => { setSelectedGenreId(null); setSelectedTagId(null); }}>
+                <TouchableOpacity onPress={() => { setSelectedGenreId(null); setSelectedTagId(null); setSelectedAuthorId(null); setSelectedCollectionId(null); }}>
                   <Text style={{ fontSize: Typography.sm, color: colors.accent, fontWeight: Typography.medium }}>Clear</Text>
                 </TouchableOpacity>
               </View>
@@ -697,7 +906,27 @@ export default function HomeScreen() {
         itemType={chipMenu.itemType}
         position={chipMenu.position}
         onClose={closeChipMenu}
-        onRemoved={() => { closeChipMenu(); fetchMetadata(); fetchSeries(0, true); }}
+        onRemoved={() => { 
+          // Optimistically remove from local state using chipMenu.itemId
+          const id = chipMenu.itemId;
+          if (id == null) return;
+          if (chipMenu.itemType === 'genre') {
+            setGenres(prev => prev.filter(g => g.id !== id));
+            if (selectedGenreId === id) setSelectedGenreId(null);
+          } else {
+            setTags(prev => prev.filter(t => t.id !== id));
+            if (selectedTagId === id) setSelectedTagId(null);
+          }
+          closeChipMenu(); 
+          fetchMetadata(); 
+          fetchSeries(0, true); 
+        }}
+        onAdded={() => {
+          // Refresh to show updated counts
+          fetchMetadata();
+          fetchSeries(0, true);
+        }}
+        allSeries={series.map(s => ({ id: s.id, name: s.name }))}
       />
 
       <CreateChipModal
@@ -705,7 +934,17 @@ export default function HomeScreen() {
         type={createChipModal.type}
         allSeries={series}
         onClose={() => setCreateChipModal(prev => ({ ...prev, visible: false }))}
-        onCreated={() => { fetchMetadata(); fetchSeries(0, true); }}
+        onCreated={(name) => { 
+          // Optimistically add to local state with a temporary ID
+          const tempId = Date.now();
+          if (createChipModal.type === 'genre') {
+            setGenres(prev => [...prev, { id: tempId, title: name } as Genre]);
+          } else {
+            setTags(prev => [...prev, { id: tempId, title: name } as Tag]);
+          }
+          fetchMetadata(); 
+          fetchSeries(0, true); 
+        }}
       />
     </View>
   );

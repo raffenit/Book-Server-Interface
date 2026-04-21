@@ -133,7 +133,7 @@ export default function LibrariesScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Screen header */}
       <View style={styles.screenHeader}>
         <Text style={styles.screenTitle}>Libraries</Text>
@@ -225,11 +225,10 @@ export default function LibrariesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   centered: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -337,7 +337,7 @@ export function ProfileSelector({ onSelectProfile, onAddProfile }: ProfileSelect
           activeOpacity={0.8}
         >
           <View style={styles.cloudAvatar}>
-            <Ionicons name="cloud-download" size={32} color={Colors.accent} />
+            <Ionicons name="cloud-download" size={32} color={Colors.secondary} />
           </View>
           <Text style={styles.cloudProfileText}>Load from Cloud</Text>
         </TouchableOpacity>
@@ -720,16 +720,17 @@ const styles = StyleSheet.create({
     fontSize: Typography.xxl,
     fontWeight: '600',
     color: '#fff',
-    marginBottom: Spacing.xl * 2,
     fontFamily: Typography.serif,
+    textAlign: 'center',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     width: '100%',
     maxWidth: 500,
     marginBottom: Spacing.xl,
+    position: 'relative',
   },
   syncButton: {
     width: 44,
@@ -738,6 +739,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(139, 94, 60, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'absolute',
+    right: 0,
   },
   subtitle: {
     fontSize: Typography.md,
@@ -855,14 +858,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.sm,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(30, 33, 50, 0.5)' : 'rgba(30, 33, 50, 0.8)',
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     borderStyle: 'dashed',
-  },
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(8px) saturate(150%)',
+      WebkitBackdropFilter: 'blur(8px) saturate(150%)',
+    } : {}),
+  } as any,
   addProfileText: {
     fontSize: Typography.sm,
-    color: '#666',
+    color: Colors.textSecondary,
     textAlign: 'center',
   },
   migrateButton: {
@@ -887,36 +894,53 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(5, 6, 15, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.xl,
-  },
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(8px)',
+      WebkitBackdropFilter: 'blur(8px)',
+    } : {}),
+  } as any,
   modalContent: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(20, 23, 40, 0.85)' : 'rgba(20, 23, 40, 0.95)',
     borderRadius: Radius.lg,
     padding: Spacing.xl,
     width: '100%',
     maxWidth: 400,
-  },
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(20px) saturate(150%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+    } : {}),
+  } as any,
   modalTitle: {
     fontSize: Typography.xl,
     fontWeight: '600',
-    color: '#fff',
+    color: Colors.textPrimary,
     marginBottom: Spacing.lg,
     textAlign: 'center',
   },
   nameInput: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(30, 33, 50, 0.6)' : 'rgba(30, 33, 50, 0.8)',
     borderRadius: Radius.md,
     padding: Spacing.md,
-    color: '#fff',
+    color: Colors.textPrimary,
     fontSize: Typography.md,
     marginBottom: Spacing.lg,
-  },
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(8px)',
+      WebkitBackdropFilter: 'blur(8px)',
+    } : {}),
+  } as any,
   colorLabel: {
     fontSize: Typography.sm,
-    color: '#999',
+    color: Colors.textSecondary,
     marginBottom: Spacing.md,
   },
   colorGrid: {
@@ -932,7 +956,7 @@ const styles = StyleSheet.create({
   },
   selectedColor: {
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: Colors.accent,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -972,14 +996,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.sm,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(139, 94, 60, 0.2)' : 'rgba(139, 94, 60, 0.3)',
     borderWidth: 2,
-    borderColor: Colors.accent,
+    borderColor: Colors.secondary,
     borderStyle: 'dashed',
-  },
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(8px) saturate(150%)',
+      WebkitBackdropFilter: 'blur(8px) saturate(150%)',
+    } : {}),
+  } as any,
   cloudProfileText: {
     fontSize: Typography.sm,
-    color: Colors.accent,
+    color: Colors.secondary,
     textAlign: 'center',
   },
 });

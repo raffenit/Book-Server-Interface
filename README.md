@@ -250,6 +250,17 @@ Uses Bearer token authentication with API tokens.
 
 ---
 
+## Where to Buy DRM-Free Books
+
+We recommend purchasing your books from these sources to support local bookshops while getting DRM-free files that work with your self-hosted libraries:
+
+- **[Libro.fm](https://libro.fm)** — DRM-free audiobooks that support your local independent bookstore
+- **[Bookshop.org](https://bookshop.org)** — DRM-free ebooks and physical books that benefit local bookshops
+
+Both services provide files you can directly add to your Kavita and Audiobookshelf libraries.
+
+---
+
 ## License
 
 MIT — use freely for your personal self-hosted setup.

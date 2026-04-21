@@ -32,6 +32,10 @@ const GLOBAL_STORAGE_KEYS = {
 const STORAGE_KEYS = {
   SERVER_URL: GLOBAL_STORAGE_KEYS.SERVER_URL,
   API_KEY: GLOBAL_STORAGE_KEYS.API_KEY,
+  USERNAME: 'folio_abs_username',
+  PASSWORD: 'folio_abs_password',
+  JWT_TOKEN: 'folio_abs_jwt_token',
+  PROGRESS_TRACKING_ENABLED: 'folio_abs_progress_tracking',
 };
 
 export interface ABSLibrary {
@@ -105,6 +109,10 @@ class AudiobookshelfAPI {
   private client: AxiosInstance;
   private serverUrl: string = '';
   private apiKey: string = '';
+  private jwtToken: string = '';
+  private username: string = '';
+  private password: string = '';
+  private progressTrackingEnabled: boolean = true;
   private proxyOrigin: string | null = null;
 
   constructor() {
@@ -188,6 +196,10 @@ class AudiobookshelfAPI {
       // 3. Fallback to Env if storage is empty
       const storedUrl = await storage.getItem(STORAGE_KEYS.SERVER_URL);
       const storedKey = await storage.getItem(STORAGE_KEYS.API_KEY);
+      const storedUsername = await storage.getItem(STORAGE_KEYS.USERNAME);
+      const storedPassword = await storage.getItem(STORAGE_KEYS.PASSWORD);
+      const storedJwt = await storage.getItem(STORAGE_KEYS.JWT_TOKEN);
+      const storedProgressEnabled = await storage.getItem(STORAGE_KEYS.PROGRESS_TRACKING_ENABLED);
       const defaultUrl = process.env.EXPO_PUBLIC_ABS_URL || '';
 
       const finalUrl = storedUrl || defaultUrl;
@@ -196,6 +208,17 @@ class AudiobookshelfAPI {
       if (finalUrl) {
         this.setServer(finalUrl, finalKey);
       }
+      
+      // Load JWT credentials if available
+      if (storedUsername) this.username = storedUsername;
+      if (storedPassword) this.password = storedPassword;
+      if (storedJwt) {
+        this.jwtToken = storedJwt;
+        this.setJwtHeader();
+      }
+      
+      // Load progress tracking preference (default true)
+      this.progressTrackingEnabled = storedProgressEnabled !== 'false';
     } catch (e) {
       console.error('Failed to initialize AudiobookshelfAPI', e);
     }
@@ -220,6 +243,77 @@ class AudiobookshelfAPI {
     this.serverUrl = clean;
     this.apiKey = key;
     this.client.defaults.baseURL = clean;
+  }
+
+  private setJwtHeader() {
+    if (this.jwtToken) {
+      this.client.defaults.headers.common['Authorization'] = `Bearer ${this.jwtToken}`;
+    } else {
+      delete this.client.defaults.headers.common['Authorization'];
+    }
+  }
+
+  async loginWithCredentials(username: string, password: string): Promise<boolean> {
+    try {
+      console.log('[ABS] Attempting JWT login for user:', username);
+      const response = await this.client.post('/api/auth/login', {
+        username,
+        password,
+      });
+      
+      if (response.data?.token) {
+        this.jwtToken = response.data.token;
+        this.username = username;
+        this.password = password;
+        this.setJwtHeader();
+        
+        // Store credentials
+        await storage.setItem(STORAGE_KEYS.USERNAME, username);
+        await storage.setItem(STORAGE_KEYS.PASSWORD, password);
+        await storage.setItem(STORAGE_KEYS.JWT_TOKEN, this.jwtToken);
+        
+        console.log('[ABS] JWT login successful');
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      console.error('[ABS] JWT login failed:', error?.response?.status, error?.message);
+      return false;
+    }
+  }
+
+  async hasJwtCredentials(): Promise<boolean> {
+    if (this.jwtToken) return true;
+    const storedJwt = await storage.getItem(STORAGE_KEYS.JWT_TOKEN);
+    if (storedJwt) {
+      this.jwtToken = storedJwt;
+      this.setJwtHeader();
+      return true;
+    }
+    return false;
+  }
+
+  isProgressTrackingEnabled(): boolean {
+    return this.progressTrackingEnabled;
+  }
+
+  async setProgressTrackingEnabled(enabled: boolean): Promise<void> {
+    this.progressTrackingEnabled = enabled;
+    await storage.setItem(STORAGE_KEYS.PROGRESS_TRACKING_ENABLED, String(enabled));
+  }
+
+  getProgressTrackingEnabled(): boolean {
+    return this.progressTrackingEnabled;
+  }
+
+  async clearJwtCredentials(): Promise<void> {
+    this.jwtToken = '';
+    this.username = '';
+    this.password = '';
+    delete this.client.defaults.headers.common['Authorization'];
+    await storage.deleteItem(STORAGE_KEYS.USERNAME);
+    await storage.deleteItem(STORAGE_KEYS.PASSWORD);
+    await storage.deleteItem(STORAGE_KEYS.JWT_TOKEN);
   }
 
   async loadCredentials() {
@@ -249,9 +343,16 @@ class AudiobookshelfAPI {
   async clearCredentials() {
     this.serverUrl = '';
     this.apiKey = '';
+    this.jwtToken = '';
+    this.username = '';
+    this.password = '';
     this.client.defaults.baseURL = '';
+    delete this.client.defaults.headers.common['Authorization'];
     await storage.deleteItem(STORAGE_KEYS.SERVER_URL);
     await storage.deleteItem(STORAGE_KEYS.API_KEY);
+    await storage.deleteItem(STORAGE_KEYS.USERNAME);
+    await storage.deleteItem(STORAGE_KEYS.PASSWORD);
+    await storage.deleteItem(STORAGE_KEYS.JWT_TOKEN);
   }
 
   hasCredentials(): boolean {
@@ -304,9 +405,15 @@ class AudiobookshelfAPI {
   }
 
   async getLibraryItems(libraryId: string, page = 0, limit = 50): Promise<{ items: ABSLibraryItem[]; total: number }> {
-    const res = await this.client.get(`/api/libraries/${libraryId}/items`, {
-      params: { page, limit, sort: 'media.metadata.title', asc: 1, include: 'progress' },
-    });
+    // Only request progress data if tracking is enabled and we have JWT
+    const includeProgress = this.progressTrackingEnabled && this.jwtToken;
+    
+    const params: any = { page, limit, sort: 'media.metadata.title', asc: 1 };
+    if (includeProgress) {
+      params.include = 'progress';
+    }
+    
+    const res = await this.client.get(`/api/libraries/${libraryId}/items`, { params });
     return { items: res.data.results ?? [], total: res.data.total ?? 0 };
   }
 

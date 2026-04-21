@@ -7,6 +7,8 @@ export interface ColorScheme {
   accent: string;
   accentDim: string;
   accentSoft: string;
+  secondary: string;
+  secondarySoft: string;
   textPrimary: string;
   textSecondary: string;
   textMuted: string;
@@ -48,6 +50,8 @@ export const defaultCustomTheme: ColorScheme = {
   accent: '#e8a838',
   accentDim: '#b8832a',
   accentSoft: 'rgba(232, 168, 56, 0.15)',
+  secondary: '#ffea4a',
+  secondarySoft: 'rgba(255, 234, 74, 0.15)',
   textPrimary: '#f0ead8',
   textSecondary: '#9a9098',
   textMuted: '#5a5568',
@@ -71,6 +75,8 @@ export const themes: Record<ThemeName, ColorScheme> = {
     accent: '#e8a838',
     accentDim: '#b8832a',
     accentSoft: 'rgba(232, 168, 56, 0.15)',
+    secondary: '#ffea4a',
+    secondarySoft: 'rgba(255, 234, 74, 0.15)',
     textPrimary: '#f0ead8',
     textSecondary: '#9a9098',
     textMuted: '#5a5568',
@@ -92,6 +98,8 @@ export const themes: Record<ThemeName, ColorScheme> = {
     accent: '#9b7cf5',
     accentDim: '#7a5ed4',
     accentSoft: 'rgba(155, 124, 245, 0.15)',
+    secondary: '#00f0e0',
+    secondarySoft: 'rgba(0, 240, 224, 0.15)',
     textPrimary: '#f0eeff',
     textSecondary: '#9090a8',
     textMuted: '#505060',
@@ -113,6 +121,8 @@ export const themes: Record<ThemeName, ColorScheme> = {
     accent: '#d4854a',
     accentDim: '#aa6838',
     accentSoft: 'rgba(212, 133, 74, 0.15)',
+    secondary: '#ffc947',
+    secondarySoft: 'rgba(255, 201, 71, 0.15)',
     textPrimary: '#ede0c8',
     textSecondary: '#9a8c78',
     textMuted: '#5e5244',
@@ -134,6 +144,8 @@ export const themes: Record<ThemeName, ColorScheme> = {
     accent: '#4d9bd6',
     accentDim: '#3a7ab0',
     accentSoft: 'rgba(77, 155, 214, 0.15)',
+    secondary: '#00e0c0',
+    secondarySoft: 'rgba(0, 224, 192, 0.15)',
     textPrimary: '#e8f0f8',
     textSecondary: '#8898ac',
     textMuted: '#4a5a6c',
@@ -155,6 +167,8 @@ export const themes: Record<ThemeName, ColorScheme> = {
     accent: '#52b56b',
     accentDim: '#3d8f52',
     accentSoft: 'rgba(82, 181, 107, 0.15)',
+    secondary: '#c8ff4a',
+    secondarySoft: 'rgba(200, 255, 74, 0.15)',
     textPrimary: '#e8f0e8',
     textSecondary: '#88a088',
     textMuted: '#4a5e4a',
@@ -176,6 +190,8 @@ export const themes: Record<ThemeName, ColorScheme> = {
     accent: '#c8a8f8',
     accentDim: '#9a78d0',
     accentSoft: 'rgba(200, 168, 248, 0.12)',
+    secondary: '#7de8e0',
+    secondarySoft: 'rgba(125, 232, 224, 0.15)',
     textPrimary: '#eeeaf8',
     textSecondary: '#8890c0',
     textMuted: '#484e78',

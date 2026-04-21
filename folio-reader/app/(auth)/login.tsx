@@ -61,12 +61,14 @@ export default function LoginScreen() {
       </Animated.View>
 
       {/* Footer */}
-      <Animated.Text 
-        style={styles.footer}
+      <Animated.View 
+        style={styles.footerContainer}
         entering={uiAnimationsEnabled ? FadeInUp.delay(300).springify() : undefined}
       >
-        Configure your servers in Settings after login.{'\n'}No data is stored externally.
-      </Animated.Text>
+        <Text style={styles.footerText}>
+          Configure your servers in Settings after login.{'\n'}No data is stored externally.
+        </Text>
+      </Animated.View>
     </ScrollView>
   );
 }
@@ -111,11 +113,23 @@ function makeStyles(colors: ColorScheme) { return StyleSheet.create({
   selectorContainer: {
     marginVertical: Spacing.lg,
   },
-  footer: {
+  footerContainer: {
+    marginTop: Spacing.lg,
+    backgroundColor: Platform.OS === 'web' ? 'rgba(20, 23, 40, 0.4)' : colors.surface,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    ...(Platform.OS === 'web' ? {
+      backdropFilter: 'blur(8px) saturate(120%)',
+      WebkitBackdropFilter: 'blur(8px) saturate(120%)',
+      boxShadow: '0 4px 30px rgba(0, 0, 0, 0.2)',
+    } : {}),
+  } as any,
+  footerText: {
     fontSize: Typography.xs,
     color: colors.textMuted,
     textAlign: 'center',
-    marginTop: Spacing.lg,
     lineHeight: 18,
   },
 });

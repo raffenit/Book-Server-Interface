@@ -1189,7 +1189,7 @@ function ABSMetadataSearchModal({ visible, itemId, initialTitle, onClose, onAppl
 const makeStyles = (colors: ColorScheme, isWide = false) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
     paddingTop: 52,
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.xl,
@@ -1225,7 +1225,7 @@ const makeStyles = (colors: ColorScheme, isWide = false) => StyleSheet.create({
     width: isWide ? 220 : '100%',
     aspectRatio: 1,
     borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surface + '88',
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
@@ -1375,7 +1375,7 @@ const makeStyles = (colors: ColorScheme, isWide = false) => StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },

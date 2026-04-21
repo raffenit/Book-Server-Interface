@@ -302,7 +302,7 @@ export function EditMetadataModal({
                       onPress={() => createGenre(genreSearch)}
                       activeOpacity={0.75}
                     >
-                      <Ionicons name="add" size={14} color={Colors.accent} />
+                      <Ionicons name="add" size={14} color={Colors.textPrimary} />
                       <Text style={styles.createChipText}>Create "{genreSearch.trim()}"</Text>
                     </TouchableOpacity>
                   )}
@@ -333,7 +333,7 @@ export function EditMetadataModal({
                       onPress={() => createTag(tagSearch)}
                       activeOpacity={0.75}
                     >
-                      <Ionicons name="add" size={14} color={Colors.accent} />
+                      <Ionicons name="add" size={14} color={Colors.textPrimary} />
                       <Text style={styles.createChipText}>Create "{tagSearch.trim()}"</Text>
                     </TouchableOpacity>
                   )}

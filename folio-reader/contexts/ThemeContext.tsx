@@ -15,6 +15,7 @@ const BASE_STORAGE_KEYS = {
   UI_GLOW: 'app_ui_glow',
   UI_ANIMATIONS: 'app_ui_animations',
   ACTIVE_CUSTOM_FONT: 'app_active_custom_font_id',
+  STARFIELD_ENABLED: 'app_starfield_enabled',
 };
 
 // Helper to get profile-scoped storage key
@@ -36,6 +37,7 @@ const STORAGE_KEYS = {
   get UI_GLOW() { return getStorageKey(BASE_STORAGE_KEYS.UI_GLOW); },
   get UI_ANIMATIONS() { return getStorageKey(BASE_STORAGE_KEYS.UI_ANIMATIONS); },
   get ACTIVE_CUSTOM_FONT() { return getStorageKey(BASE_STORAGE_KEYS.ACTIVE_CUSTOM_FONT); },
+  get STARFIELD_ENABLED() { return getStorageKey(BASE_STORAGE_KEYS.STARFIELD_ENABLED); },
 };
 
 interface ThemeContextType {
@@ -56,6 +58,8 @@ interface ThemeContextType {
   uiGlowEnabled: boolean;
   uiAnimationsEnabled: boolean;
   setUiEffects: (glow: boolean, animations: boolean) => Promise<void>;
+  starfieldEnabled: boolean;
+  setStarfieldEnabled: (enabled: boolean) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -75,6 +79,8 @@ const ThemeContext = createContext<ThemeContextType>({
   uiGlowEnabled: true,
   uiAnimationsEnabled: true,
   setUiEffects: async () => {},
+  starfieldEnabled: true,
+  setStarfieldEnabled: async () => {},
 });
 
 function injectFontFace(font: CustomFont) {
@@ -159,6 +165,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [customThemeColors, setCustomThemeColors] = useState<{ bg: string; accent: string }>({ bg: '#0d0d12', accent: '#e8a838' });
   const [uiGlowEnabled, setUiGlowEnabled] = useState<boolean>(true);
   const [uiAnimationsEnabled, setUiAnimationsEnabled] = useState<boolean>(true);
+  const [starfieldEnabled, setStarfieldEnabledState] = useState<boolean>(true);
 
   useEffect(() => {
     (async () => {
@@ -169,11 +176,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const cc = await storage.getItem(STORAGE_KEYS.CUSTOM_COLORS);
       const glow = await storage.getItem(STORAGE_KEYS.UI_GLOW);
       const animate = await storage.getItem(STORAGE_KEYS.UI_ANIMATIONS);
+      const starfield = await storage.getItem(STORAGE_KEYS.STARFIELD_ENABLED);
 
       if (t && themes[t]) setThemeName(t);
 
       if (glow !== null) setUiGlowEnabled(glow === 'true');
       if (animate !== null) setUiAnimationsEnabled(animate === 'true');
+      if (starfield !== null) setStarfieldEnabledState(starfield === 'true');
 
       if (cc) {
         try {
@@ -258,6 +267,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     await storage.setItem(STORAGE_KEYS.UI_ANIMATIONS, animations ? 'true' : 'false');
   }
 
+  async function setStarfieldEnabled(enabled: boolean) {
+    setStarfieldEnabledState(enabled);
+    await storage.setItem(STORAGE_KEYS.STARFIELD_ENABLED, enabled ? 'true' : 'false');
+  }
+
   // Resolve the CSS font-family string for the active selection
   const activeCustomFont = activeCustomFontId
     ? customFonts.find(f => f.id === activeCustomFontId)
@@ -289,6 +303,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       uiGlowEnabled,
       uiAnimationsEnabled,
       setUiEffects,
+      starfieldEnabled,
+      setStarfieldEnabled,
     }}>
       {children}
     </ThemeContext.Provider>

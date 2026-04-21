@@ -22,6 +22,7 @@ import { STORAGE_KEYS } from '../../constants/config';
 import { storage } from '../../services/storage';
 import { exportProfiles, importProfiles, downloadBackupFile, loadBackupFile } from '../../services/backup';
 import { Ionicons } from '@expo/vector-icons';
+import { discoverServers, quickDiscover, DiscoveredServer } from '@/services/serverDiscovery';
 import { useRouter } from 'expo-router';
 import TabHeader from '../../components/TabHeader';
 
@@ -83,21 +84,62 @@ function SettingRow({ icon, label, value, onPress, destructive, loading, statusT
 
 // ── Kavita Configuration Modal ────────────────────────────────────────────────
 
-function KavitaConfigModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function KavitaConfigModal({ visible, onClose, onSuccess }: { visible: boolean; onClose: () => void; onSuccess?: () => void }) {
   const { colors } = useTheme();
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState('');
   const [statusOk, setStatusOk] = useState(false);
+  const [discoveredServers, setDiscoveredServers] = useState<DiscoveredServer[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setUrl(kavitaAPI.getServerUrl());
       setKey(kavitaAPI.getApiKey() || '');
       setStatus('');
+      setDiscoveredServers([]);
+      setManualMode(false);
+      // Auto-start quick scan
+      quickDiscover().then(servers => {
+        const kavitaServers = servers.filter(s => s.type === 'kavita');
+        setDiscoveredServers(kavitaServers);
+        if (kavitaServers.length === 0) {
+          // No quick discoveries, try full network scan
+          runFullDiscovery();
+        }
+      });
     }
   }, [visible]);
+
+  async function runFullDiscovery() {
+    setScanning(true);
+    setStatus('Scanning your network for Kavita servers...');
+    try {
+      const servers = await discoverServers();
+      const kavitaServers = servers.filter(s => s.type === 'kavita');
+      setDiscoveredServers(kavitaServers);
+      if (kavitaServers.length === 0) {
+        setStatus('No servers found. Try manual entry below.');
+        setManualMode(true);
+      } else {
+        setStatus('');
+      }
+    } catch (e) {
+      setStatus('Scan failed. Try manual entry.');
+      setManualMode(true);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function selectServer(server: DiscoveredServer) {
+    setUrl(server.url);
+    setManualMode(true);
+    setStatus(`Found ${server.name} at ${server.url}. Now enter your API key.`);
+  }
 
   async function handleSave() {
     if (!url.trim() || !key.trim()) {
@@ -106,17 +148,44 @@ function KavitaConfigModal({ visible, onClose }: { visible: boolean; onClose: ()
       return;
     }
     setTesting(true);
-    setStatus('');
+    setStatus('Testing connection...');
     try {
       await kavitaAPI.saveCredentials(url.trim(), key.trim());
+      // Authenticate to get JWT token
+      await kavitaAPI.login();
       // Test the connection by fetching libraries (like ABS does)
       const libraries = await kavitaAPI.getLibraries();
+      console.log('[KavitaModal] Libraries response:', libraries);
+      
+      if (!Array.isArray(libraries)) {
+        setStatusOk(false);
+        setStatus('Invalid response from server. Check API key permissions.');
+        return;
+      }
+      
+      if (libraries.length === 0) {
+        setStatusOk(true);
+        setStatus('Connected! No libraries found on this server.');
+        setTimeout(() => { onSuccess?.(); onClose(); }, 1200);
+        return;
+      }
+      
       setStatusOk(true);
       setStatus(`Connected! Found ${libraries.length} librar${libraries.length === 1 ? 'y' : 'ies'}.`);
-      setTimeout(onClose, 800);
+      setTimeout(() => { onSuccess?.(); onClose(); }, 800);
     } catch (e: any) {
+      console.error('[KavitaModal] Connection error:', e?.response?.status, e?.message);
       setStatusOk(false);
-      setStatus(`Could not reach server — check URL and API key.`);
+      const status = e?.response?.status;
+      if (status === 401) {
+        setStatus('Unauthorized — check your API key.');
+      } else if (status === 404) {
+        setStatus('Server not found — check the URL.');
+      } else if (status >= 500) {
+        setStatus('Server error — check Kavita is running.');
+      } else {
+        setStatus(`Could not reach server (${status || 'network error'}). Check URL and API key.`);
+      }
     } finally {
       setTesting(false);
     }
@@ -142,19 +211,63 @@ function KavitaConfigModal({ visible, onClose }: { visible: boolean; onClose: ()
             <Ionicons name="close" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
-        <View style={{ marginBottom: Spacing.lg }}>
-          <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Server URL</Text>
-          <TextInput
-            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
-            value={url}
-            onChangeText={setUrl}
-            placeholder="192.168.1.100:8050 or http://..."
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-          />
-        </View>
+        {/* Discovered Servers */}
+        {discoveredServers.length > 0 && (
+          <View style={{ marginBottom: Spacing.lg }}>
+            <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Found Servers</Text>
+            {discoveredServers.map((server, idx) => (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => selectServer(server)}
+                style={{
+                  backgroundColor: colors.surface,
+                  borderWidth: 1,
+                  borderColor: url === server.url ? colors.accent : colors.border,
+                  borderRadius: Radius.md,
+                  padding: Spacing.md,
+                  marginBottom: Spacing.sm,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={20} color={url === server.url ? colors.accent : colors.success} style={{ marginRight: Spacing.sm }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: Typography.base, fontWeight: Typography.semibold, color: colors.textPrimary }}>{server.name}</Text>
+                  <Text style={{ fontSize: Typography.xs, color: colors.textMuted }}>{server.url}</Text>
+                </View>
+                {url === server.url && <Ionicons name="checkmark" size={16} color={colors.accent} />}
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity onPress={() => setManualMode(true)} style={{ alignItems: 'center', marginTop: Spacing.sm }}>
+              <Text style={{ fontSize: Typography.sm, color: colors.accent }}>Enter Manually Instead</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Manual Entry */}
+        {(manualMode || discoveredServers.length === 0) && (
+          <>
+            <View style={{ marginBottom: Spacing.lg }}>
+              <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Server URL</Text>
+              <TextInput
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
+                value={url}
+                onChangeText={setUrl}
+                placeholder="192.168.1.100:8050 or http://..."
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+              {scanning && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm }}>
+                  <ActivityIndicator size="small" color={colors.accent} style={{ marginRight: Spacing.sm }} />
+                  <Text style={{ fontSize: Typography.xs, color: colors.textMuted }}>Scanning network...</Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
         <View style={{ marginBottom: Spacing.lg }}>
           <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>API Key</Text>
           <TextInput
@@ -187,21 +300,70 @@ function KavitaConfigModal({ visible, onClose }: { visible: boolean; onClose: ()
 
 // ── ABS Configuration Modal ───────────────────────────────────────────────────
 
-function ABSConfigModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function ABSConfigModal({ visible, onClose, onSuccess }: { visible: boolean; onClose: () => void; onSuccess?: () => void }) {
   const { colors } = useTheme();
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showJwtFields, setShowJwtFields] = useState(false);
+  const [progressTracking, setProgressTracking] = useState(true);
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState('');
   const [statusOk, setStatusOk] = useState(false);
+  const [discoveredServers, setDiscoveredServers] = useState<DiscoveredServer[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setUrl(absAPI.getServerUrl());
       setKey(absAPI.getApiKey() || '');
+      setUsername('');
+      setPassword('');
+      setProgressTracking(absAPI.getProgressTrackingEnabled());
       setStatus('');
+      setShowJwtFields(false);
+      setDiscoveredServers([]);
+      setManualMode(false);
+      // Auto-start quick scan
+      quickDiscover().then(servers => {
+        const absServers = servers.filter(s => s.type === 'abs');
+        setDiscoveredServers(absServers);
+        if (absServers.length === 0) {
+          // No quick discoveries, try full network scan
+          runFullDiscovery();
+        }
+      });
     }
   }, [visible]);
+
+  async function runFullDiscovery() {
+    setScanning(true);
+    setStatus('Scanning your network for AudioBookShelf servers...');
+    try {
+      const servers = await discoverServers();
+      const absServers = servers.filter(s => s.type === 'abs');
+      setDiscoveredServers(absServers);
+      if (absServers.length === 0) {
+        setStatus('No servers found. Try manual entry below.');
+        setManualMode(true);
+      } else {
+        setStatus('');
+      }
+    } catch (e) {
+      setStatus('Scan failed. Try manual entry.');
+      setManualMode(true);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function selectServer(server: DiscoveredServer) {
+    setUrl(server.url);
+    setManualMode(true);
+    setStatus(`Found ${server.name} at ${server.url}. Now enter your API key.`);
+  }
 
   async function handleSave() {
     if (!url.trim() || !key.trim()) {
@@ -213,13 +375,29 @@ function ABSConfigModal({ visible, onClose }: { visible: boolean; onClose: () =>
     setStatus('');
     try {
       await absAPI.saveCredentials(url.trim(), key.trim());
+      await absAPI.setProgressTrackingEnabled(progressTracking);
+      
+      // If JWT credentials provided, try to login
+      let jwtSuccess = false;
+      if (username.trim() && password.trim()) {
+        setStatus('Testing connection & logging in...');
+        jwtSuccess = await absAPI.loginWithCredentials(username.trim(), password.trim());
+        if (!jwtSuccess) {
+          setStatusOk(false);
+          setStatus('Server connected but JWT login failed. Check username/password.');
+          setTesting(false);
+          return;
+        }
+      }
+      
       // Use getLibraries() instead of ping() — ping() bypasses the proxy and hits
       // the server directly, causing CORS failures on web. getLibraries() goes
       // through /proxy?url= and also verifies the server is actually ABS.
       const libraries = await absAPI.getLibraries();
       setStatusOk(true);
-      setStatus(`Connected! Found ${libraries.length} librar${libraries.length === 1 ? 'y' : 'ies'}.`);
-      setTimeout(onClose, 800);
+      const jwtMsg = jwtSuccess ? ' with progress tracking' : '';
+      setStatus(`Connected! Found ${libraries.length} librar${libraries.length === 1 ? 'y' : 'ies'}${jwtMsg}.`);
+      setTimeout(() => { onSuccess?.(); onClose(); }, 800);
     } catch (e: any) {
       setStatusOk(false);
       setStatus(`Could not reach server — check URL and API key.`);
@@ -242,46 +420,151 @@ function ABSConfigModal({ visible, onClose }: { visible: boolean; onClose: () =>
             <Ionicons name="close" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
-        <View style={{ marginBottom: Spacing.lg }}>
-          <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Server URL</Text>
-          <TextInput
-            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
-            value={url}
-            onChangeText={setUrl}
-            placeholder="http://192.168.1.x:13378"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-          />
-        </View>
-        <View style={{ marginBottom: Spacing.lg }}>
-          <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>API Key</Text>
-          <TextInput
-            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
-            value={key}
-            onChangeText={setKey}
-            placeholder="Your AudioBookShelf API token"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
-          />
-          <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 4 }}>Found in AudioBookShelf → Settings → Users → your user → API Token</Text>
-        </View>
-        {status ? <Text style={{ fontSize: Typography.sm, marginBottom: Spacing.md, color: statusOk ? colors.success : colors.error }}>{status}</Text> : null}
-        <TouchableOpacity
-          style={{ backgroundColor: colors.accent, borderRadius: Radius.md, padding: Spacing.base, alignItems: 'center', marginBottom: Spacing.md, opacity: testing ? 0.6 : 1 }}
-          onPress={handleSave}
-          disabled={testing}
-        >
-          {testing ? <ActivityIndicator color={colors.textOnAccent} /> : <Text style={{ fontSize: Typography.md, fontWeight: Typography.bold, color: colors.textOnAccent }}>Save &amp; Test</Text>}
-        </TouchableOpacity>
-        {absAPI.hasCredentials() && (
-          <TouchableOpacity style={{ alignItems: 'center', padding: Spacing.md }} onPress={handleClear}>
-            <Text style={{ fontSize: Typography.base, color: colors.error }}>Disconnect AudioBookShelf</Text>
+        
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          {/* Discovered Servers */}
+          {discoveredServers.length > 0 && (
+            <View style={{ marginBottom: Spacing.lg }}>
+              <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Found Servers</Text>
+              {discoveredServers.map((server, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => selectServer(server)}
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: url === server.url ? colors.accent : colors.border,
+                    borderRadius: Radius.md,
+                    padding: Spacing.md,
+                    marginBottom: Spacing.sm,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color={url === server.url ? colors.accent : colors.success} style={{ marginRight: Spacing.sm }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: Typography.base, fontWeight: Typography.semibold, color: colors.textPrimary }}>{server.name}</Text>
+                    <Text style={{ fontSize: Typography.xs, color: colors.textMuted }}>{server.url}</Text>
+                  </View>
+                  {url === server.url && <Ionicons name="checkmark" size={16} color={colors.accent} />}
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={() => setManualMode(true)} style={{ alignItems: 'center', marginTop: Spacing.sm }}>
+                <Text style={{ fontSize: Typography.sm, color: colors.accent }}>Enter Manually Instead</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Manual Entry */}
+          {(manualMode || discoveredServers.length === 0) && (
+            <>
+              <View style={{ marginBottom: Spacing.lg }}>
+                <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Server URL</Text>
+                <TextInput
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
+                  value={url}
+                  onChangeText={setUrl}
+                  placeholder="http://192.168.1.x:13378"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+                {scanning && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm }}>
+                    <ActivityIndicator size="small" color={colors.accent} style={{ marginRight: Spacing.sm }} />
+                    <Text style={{ fontSize: Typography.xs, color: colors.textMuted }}>Scanning network...</Text>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
+          
+          <View style={{ marginBottom: Spacing.lg }}>
+            <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>API Key</Text>
+            <TextInput
+              style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
+              value={key}
+              onChangeText={setKey}
+              placeholder="Your AudioBookShelf API token"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+            <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 4 }}>Found in AudioBookShelf → Settings → Users → your user → API Token</Text>
+          </View>
+
+          {/* Progress Tracking Toggle */}
+          <View style={{ marginBottom: Spacing.lg, padding: Spacing.md, backgroundColor: colors.surface, borderRadius: Radius.md }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: Typography.base, fontWeight: Typography.semibold, color: colors.textPrimary }}>Continue Listening</Text>
+                <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 2 }}>Show "in progress" audiobooks section</Text>
+              </View>
+              <Switch
+                value={progressTracking}
+                onValueChange={setProgressTracking}
+                trackColor={{ false: colors.border, true: colors.accent + '80' }}
+                thumbColor={progressTracking ? colors.accent : colors.textMuted}
+              />
+            </View>
+          </View>
+
+          {/* JWT Login Section (Optional) */}
+          <TouchableOpacity
+            onPress={() => setShowJwtFields(!showJwtFields)}
+            style={{ marginBottom: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}
+          >
+            <Ionicons name={showJwtFields ? 'chevron-down' : 'chevron-forward'} size={16} color={colors.textSecondary} />
+            <Text style={{ fontSize: Typography.sm, color: colors.textSecondary }}>Optional: Login for progress sync (JWT)</Text>
           </TouchableOpacity>
-        )}
+
+          {showJwtFields && (
+            <>
+              <View style={{ marginBottom: Spacing.lg }}>
+                <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Username (Optional)</Text>
+                <TextInput
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
+                  value={username}
+                  onChangeText={setUsername}
+                  placeholder="ABS username for progress sync"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={{ marginBottom: Spacing.lg }}>
+                <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Password (Optional)</Text>
+                <TextInput
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="ABS password"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+                <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 4 }}>Required for "Continue Listening" feature</Text>
+              </View>
+            </>
+          )}
+          
+          {status ? <Text style={{ fontSize: Typography.sm, marginBottom: Spacing.md, color: statusOk ? colors.success : colors.error }}>{status}</Text> : null}
+          <TouchableOpacity
+            style={{ backgroundColor: colors.accent, borderRadius: Radius.md, padding: Spacing.base, alignItems: 'center', marginBottom: Spacing.md, opacity: testing ? 0.6 : 1 }}
+            onPress={handleSave}
+            disabled={testing}
+          >
+            {testing ? <ActivityIndicator color={colors.textOnAccent} /> : <Text style={{ fontSize: Typography.md, fontWeight: Typography.bold, color: colors.textOnAccent }}>Save &amp; Test</Text>}
+          </TouchableOpacity>
+          {absAPI.hasCredentials() && (
+            <TouchableOpacity style={{ alignItems: 'center', padding: Spacing.md }} onPress={handleClear}>
+              <Text style={{ fontSize: Typography.base, color: colors.error }}>Disconnect AudioBookShelf</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -619,11 +902,13 @@ function ProfileSection() {
     <View style={[styles.section, { marginBottom: Spacing.md }]}>
       <Text style={styles.sectionTitle}>Profile</Text>
       <View style={{
-        backgroundColor: colors.surface,
+        backgroundColor: 'rgba(10, 12, 25, 0.85)',
         borderRadius: Radius.md,
         padding: Spacing.md,
         flexDirection: 'row',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
       }}>
         <View style={{
           width: 40,
@@ -670,15 +955,14 @@ function ProfileSection() {
 // ── Main Settings Screen ──────────────────────────────────────────────────────
 
 export default function SettingsScreen() {
-  const { serverUrl, serverType, logout } = useAuth();
-  const { themeName, fontName, setTheme, setFont, colors, customFonts, setCustomFont, addCustomFont, removeCustomFont, activeCustomFontId, customThemeColors, setCustomTheme, uiGlowEnabled, uiAnimationsEnabled, setUiEffects } = useTheme();
+  const { serverUrl, serverType, kavitaConnected, absConnected, logoutKavita, logoutABS, recheckConnections } = useAuth();
+  const { themeName, fontName, setTheme, setFont, colors, customFonts, setCustomFont, addCustomFont, removeCustomFont, activeCustomFontId, customThemeColors, setCustomTheme, uiGlowEnabled, uiAnimationsEnabled, setUiEffects, starfieldEnabled, setStarfieldEnabled } = useTheme();
   const [customBg, setCustomBg] = useState(customThemeColors.bg);
   const [customAccent, setCustomAccent] = useState(customThemeColors.accent);
   const [customBgFocused, setCustomBgFocused] = useState(false);
   const [customAccentFocused, setCustomAccentFocused] = useState(false);
   const styles = makeStyles(colors);
   const [kavitaModalVisible, setKavitaModalVisible] = useState(false);
-  const [kavitaUrl, setKavitaUrl] = useState(kavitaAPI.getServerUrl());
   const [scanLoading, setScanLoading] = useState(false);
   const [scanStatus, setScanStatus] = useState('');
   const [scanOk, setScanOk] = useState(false);
@@ -686,17 +970,30 @@ export default function SettingsScreen() {
   const [analyzeStatus, setAnalyzeStatus] = useState('');
   const [analyzeOk, setAnalyzeOk] = useState(false);
   const [absModalVisible, setAbsModalVisible] = useState(false);
-  const [absConnected, setAbsConnected] = useState(false);
   const [absScanLoading, setAbsScanLoading] = useState(false);
   const [absScanStatus, setAbsScanStatus] = useState('');
   const [absScanOk, setAbsScanOk] = useState(false);
   const [gbModalVisible, setGbModalVisible] = useState(false);
   const [gbHasKey, setGbHasKey] = useState(false);
+  const [kavitaProgressTracking, setKavitaProgressTracking] = useState(true);
+  const [absProgressTracking, setAbsProgressTracking] = useState(true);
 
   useEffect(() => {
-    absAPI.initialize().then(() => setAbsConnected(absAPI.hasCredentials()));
     storage.getItem(STORAGE_KEYS.GOOGLE_BOOKS_API_KEY).then(val => setGbHasKey(!!val));
+    // Load progress tracking preferences
+    setKavitaProgressTracking(kavitaAPI.isProgressTrackingEnabled());
+    setAbsProgressTracking(absAPI.getProgressTrackingEnabled());
   }, []);
+
+  async function toggleKavitaProgressTracking(value: boolean) {
+    await kavitaAPI.setProgressTrackingEnabled(value);
+    setKavitaProgressTracking(value);
+  }
+
+  async function toggleAbsProgressTracking(value: boolean) {
+    await absAPI.setProgressTrackingEnabled(value);
+    setAbsProgressTracking(value);
+  }
 
   async function handleScanAll() {
     setScanLoading(true);
@@ -751,9 +1048,13 @@ export default function SettingsScreen() {
   const displayUrl = serverUrl.replace(/^https?:\/\//, '');
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{
+      flex: 1,
+      backgroundColor: Platform.OS === 'web' ? 'rgba(5, 6, 15, 0.15)' : colors.background,
+      backdropFilter: Platform.OS === 'web' ? 'blur(4px)' : undefined,
+    } as any}>
       <TabHeader title="Settings" />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         {/* Profile Section - Near Top */}
         <ProfileSection />
 
@@ -764,14 +1065,14 @@ export default function SettingsScreen() {
           <ServerCard
             name="Kavita"
             icon="book"
-            url={kavitaUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+            url={kavitaConnected ? kavitaAPI.getServerUrl().replace(/^https?:\/\//, '').replace(/\/$/, '') : undefined}
             isActive={serverType === 'kavita'}
-            isConnected={kavitaAPI.hasCredentials()}
+            isConnected={kavitaConnected}
             onEdit={() => setKavitaModalVisible(true)}
             onSync={serverType === 'kavita' ? handleScanAll : undefined}
-            onDisconnect={logout}
+            onDisconnect={logoutKavita}
           />
-          
+
           <ServerCard
             name="AudioBookShelf"
             icon="headset"
@@ -779,14 +1080,46 @@ export default function SettingsScreen() {
             isActive={serverType === 'abs'}
             isConnected={absConnected}
             onEdit={() => setAbsModalVisible(true)}
-            onDisconnect={async () => {
-              await absAPI.clearCredentials();
-              setAbsConnected(false);
-              if (serverType === 'abs') {
-                logout();
-              }
-            }}
+            onDisconnect={logoutABS}
           />
+
+          {/* Progress Tracking Settings */}
+          {(kavitaConnected || absConnected) && (
+            <View style={{ marginTop: Spacing.lg }}>
+              {kavitaConnected && (
+                <View style={{ marginBottom: Spacing.md, padding: Spacing.md, backgroundColor: colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: Typography.base, fontWeight: Typography.semibold, color: colors.textPrimary }}>Kavita: Continue Reading</Text>
+                      <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 2 }}>Show "in progress" ebooks section</Text>
+                    </View>
+                    <Switch
+                      value={kavitaProgressTracking}
+                      onValueChange={toggleKavitaProgressTracking}
+                      trackColor={{ false: colors.border, true: colors.accent + '80' }}
+                      thumbColor={kavitaProgressTracking ? colors.accent : colors.textMuted}
+                    />
+                  </View>
+                </View>
+              )}
+              {absConnected && (
+                <View style={{ padding: Spacing.md, backgroundColor: colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: Typography.base, fontWeight: Typography.semibold, color: colors.textPrimary }}>ABS: Continue Listening</Text>
+                      <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 2 }}>Show "in progress" audiobooks section</Text>
+                    </View>
+                    <Switch
+                      value={absProgressTracking}
+                      onValueChange={toggleAbsProgressTracking}
+                      trackColor={{ false: colors.border, true: colors.accent + '80' }}
+                      thumbColor={absProgressTracking ? colors.accent : colors.textMuted}
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         {/* External Services */}
@@ -876,6 +1209,14 @@ export default function SettingsScreen() {
               switchValue={uiAnimationsEnabled}
               onSwitchChange={(val) => setUiEffects(uiGlowEnabled, val)}
             />
+            <View style={styles.divider} />
+            <SettingRow
+              icon="planet-outline"
+              label="Starry Background"
+              isSwitch
+              switchValue={starfieldEnabled}
+              onSwitchChange={setStarfieldEnabled}
+            />
           </View>
         </View>
 
@@ -937,23 +1278,6 @@ export default function SettingsScreen() {
                     autoCorrect={false}
                     onFocus={() => setCustomBgFocused(true)}
                     onBlur={() => setCustomBgFocused(false)}
-                  />
-                </View>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginBottom: 4 }}>Accent</Text>
-                <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' }}>
-                  <View style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: customAccent, borderWidth: 1, borderColor: colors.border }} />
-                  <TextInput
-                    style={{ flex: 1, backgroundColor: colors.background, borderWidth: 1, borderColor: customAccentFocused ? colors.accent : colors.border, borderRadius: Radius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 6, fontSize: Typography.sm, color: colors.textPrimary, fontFamily: 'monospace' }}
-                    value={customAccent}
-                    onChangeText={setCustomAccent}
-                    placeholder="#e8a838"
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    onFocus={() => setCustomAccentFocused(true)}
-                    onBlur={() => setCustomAccentFocused(false)}
                   />
                 </View>
               </View>
@@ -1187,18 +1511,14 @@ export default function SettingsScreen() {
 
       <KavitaConfigModal
         visible={kavitaModalVisible}
-        onClose={() => {
-          setKavitaModalVisible(false);
-          setKavitaUrl(kavitaAPI.getServerUrl());
-        }}
+        onClose={() => setKavitaModalVisible(false)}
+        onSuccess={recheckConnections}
       />
 
       <ABSConfigModal
         visible={absModalVisible}
-        onClose={() => {
-          setAbsModalVisible(false);
-          setAbsConnected(absAPI.hasCredentials());
-        }}
+        onClose={() => setAbsModalVisible(false)}
+        onSuccess={recheckConnections}
       />
 
       <GoogleBooksConfigModal

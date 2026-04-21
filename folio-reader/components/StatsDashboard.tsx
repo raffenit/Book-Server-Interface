@@ -63,7 +63,7 @@ export function StatsDashboard() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' }}>
         <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
@@ -71,11 +71,11 @@ export function StatsDashboard() {
 
   if (!stats || stats.totalReadingTimeMinutes === 0) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, padding: Spacing.base }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', padding: Spacing.base }}>
         <Text style={{ fontSize: Typography.xl, fontWeight: Typography.bold, color: colors.textPrimary, marginBottom: Spacing.lg }}>
           Reading Stats
         </Text>
-        <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.xl, alignItems: 'center' }}>
+        <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.5)', borderRadius: Radius.md, padding: Spacing.xl, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
           <Ionicons name="book-outline" size={48} color={colors.textMuted} />
           <Text style={{ fontSize: Typography.base, color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.md }}>
             No reading data yet.
@@ -102,13 +102,13 @@ export function StatsDashboard() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: Spacing.base, paddingBottom: 100 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: 'transparent' }} contentContainerStyle={{ padding: Spacing.base, paddingBottom: 100 }}>
       <Text style={{ fontSize: Typography.xl, fontWeight: Typography.bold, color: colors.textPrimary, marginBottom: Spacing.lg }}>
         Reading Stats
       </Text>
 
       {/* Streak Card */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg }}>
+      <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.5)', borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
           <Ionicons name="flame" size={24} color="#FF6B35" />
           <Text style={{ fontSize: Typography.lg, fontWeight: Typography.semibold, color: colors.textPrimary, marginLeft: Spacing.sm }}>
@@ -132,7 +132,7 @@ export function StatsDashboard() {
       </View>
 
       {/* Reader Personality Card */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg }}>
+      <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.5)', borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
           <Text style={{ fontSize: 32, marginRight: Spacing.sm }}>{stats.personality.emoji}</Text>
           <View>
@@ -156,7 +156,7 @@ export function StatsDashboard() {
       </View>
 
       {/* Time Stats */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg }}>
+      <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.5)', borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
           <Ionicons name="time-outline" size={24} color={colors.accent} />
           <Text style={{ fontSize: Typography.lg, fontWeight: Typography.semibold, color: colors.textPrimary, marginLeft: Spacing.sm }}>
@@ -185,7 +185,7 @@ export function StatsDashboard() {
         </View>
         
         {/* Peak reading times */}
-        <View style={{ backgroundColor: colors.background, borderRadius: Radius.md, padding: Spacing.md, marginTop: Spacing.sm }}>
+        <View style={{ backgroundColor: 'rgba(20, 23, 40, 0.4)', borderRadius: Radius.md, padding: Spacing.md, marginTop: Spacing.sm }}>
           <Text style={{ fontSize: Typography.sm, color: colors.textMuted, marginBottom: Spacing.sm }}>
             Peak Reading Times
           </Text>
@@ -207,7 +207,7 @@ export function StatsDashboard() {
       </View>
 
       {/* Books Stats */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg }}>
+      <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.5)', borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
           <Ionicons name="library-outline" size={24} color={colors.accent} />
           <Text style={{ fontSize: Typography.lg, fontWeight: Typography.semibold, color: colors.textPrimary, marginLeft: Spacing.sm }}>
@@ -237,7 +237,7 @@ export function StatsDashboard() {
       </View>
 
       {/* Format Breakdown */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg }}>
+      <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.5)', borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
           <Ionicons name="headset-outline" size={24} color={colors.accent} />
           <Text style={{ fontSize: Typography.lg, fontWeight: Typography.semibold, color: colors.textPrimary, marginLeft: Spacing.sm }}>
@@ -298,7 +298,7 @@ export function StatsDashboard() {
       </View>
 
       {/* Goals Section */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg }}>
+      <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.5)', borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="trophy-outline" size={24} color={colors.accent} />
@@ -379,7 +379,7 @@ export function StatsDashboard() {
       </View>
 
       {/* Monthly Activity */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg }}>
+      <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.5)', borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
           <Ionicons name="bar-chart-outline" size={24} color={colors.accent} />
           <Text style={{ fontSize: Typography.lg, fontWeight: Typography.semibold, color: colors.textPrimary, marginLeft: Spacing.sm }}>
@@ -428,7 +428,7 @@ export function StatsDashboard() {
         onRequestClose={() => setGoalsModalVisible(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: Spacing.base }}>
-          <View style={{ backgroundColor: colors.surface, borderRadius: Radius.md, padding: Spacing.lg, width: '100%', maxWidth: 400 }}>
+          <View style={{ backgroundColor: 'rgba(30, 33, 50, 0.9)', borderRadius: Radius.md, padding: Spacing.lg, width: '100%', maxWidth: 400, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
             <Text style={{ fontSize: Typography.lg, fontWeight: Typography.bold, color: colors.textPrimary, marginBottom: Spacing.lg }}>
               Edit Reading Goals
             </Text>

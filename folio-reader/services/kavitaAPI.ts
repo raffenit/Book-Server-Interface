@@ -37,6 +37,7 @@ const STORAGE_KEYS = {
   SERVER_URL: GLOBAL_STORAGE_KEYS.SERVER_URL,
   API_KEY: GLOBAL_STORAGE_KEYS.API_KEY,
   get JWT_TOKEN() { return getStorageKey(BASE_STORAGE_KEYS.JWT_TOKEN); },
+  PROGRESS_TRACKING_ENABLED: 'folio_kavita_progress_tracking',
 };
 
 export interface KavitaBookInfo {
@@ -204,6 +205,7 @@ class KavitaAPI {
   private serverUrl: string = '';
   private apiKey: string = '';
   private jwtToken: string = '';
+  private progressTrackingEnabled: boolean = true;
   private proxyOrigin: string | null = null;
 
   constructor() {
@@ -263,9 +265,13 @@ class KavitaAPI {
       if (__DEV__) {
         console.log(`Kavita Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
       }
-      
+
       if (this.jwtToken) {
         config.headers.Authorization = `Bearer ${this.jwtToken}`;
+      } else if (this.apiKey && config.url) {
+        // Add API key as query parameter when JWT is not available
+        const separator = config.url.includes('?') ? '&' : '?';
+        config.url = `${config.url}${separator}apiKey=${encodeURIComponent(this.apiKey)}`;
       }
       return config;
     });
@@ -280,6 +286,7 @@ class KavitaAPI {
     try {
       const storedUrl = await storage.getItem(STORAGE_KEYS.SERVER_URL);
       const storedKey = await storage.getItem(STORAGE_KEYS.API_KEY);
+      const storedProgressEnabled = await storage.getItem(STORAGE_KEYS.PROGRESS_TRACKING_ENABLED);
       console.log('[KavitaAPI] Stored credentials found:', !!storedUrl, !!storedKey);
 
       if (storedUrl && storedKey) {
@@ -296,9 +303,21 @@ class KavitaAPI {
       } else {
         console.log('[KavitaAPI] No stored credentials');
       }
+      
+      // Load progress tracking preference (default true)
+      this.progressTrackingEnabled = storedProgressEnabled !== 'false';
     } catch (e) {
       console.error('Failed to initialize KavitaAPI', e);
     }
+  }
+
+  isProgressTrackingEnabled(): boolean {
+    return this.progressTrackingEnabled;
+  }
+
+  async setProgressTrackingEnabled(enabled: boolean): Promise<void> {
+    this.progressTrackingEnabled = enabled;
+    await storage.setItem(STORAGE_KEYS.PROGRESS_TRACKING_ENABLED, String(enabled));
   }
 
   private setServer(url: string, key: string) {
@@ -378,9 +397,23 @@ class KavitaAPI {
       console.error('[KavitaAPI] Login error:', status, error?.response?.data || error?.message);
       
       // 404 means this Kavita version doesn't have the Plugin API
-      // Return false so we can fall back to apiKey query param auth
+      // Validate the API key works by making a test request
       if (status === 404) {
-        console.log('[KavitaAPI] Plugin API not available (404), falling back to apiKey auth');
+        console.log('[KavitaAPI] Plugin API not available (404), validating API key via test request...');
+        try {
+          // Test the API key by calling /api/Library with apiKey param
+          const testResponse = await this.client.get('/api/Library', {
+            params: { apiKey: this.apiKey }
+          });
+          if (testResponse.status === 200) {
+            console.log('[KavitaAPI] API key validated successfully via /api/Library');
+            // Mark as authenticated with API key (no JWT)
+            return true;
+          }
+        } catch (testError: any) {
+          console.error('[KavitaAPI] API key validation failed:', testError?.response?.status, testError?.message);
+          return false;
+        }
         return false;
       }
       
@@ -601,6 +634,24 @@ class KavitaAPI {
       pageSize,
     });
     return response.data;
+  }
+
+  async addGenreToSeries(seriesId: number, genre: { id: number; title: string }): Promise<void> {
+    const meta = await this.getSeriesMetadata(seriesId);
+    if (!meta) return;
+    // Check if genre already exists
+    if (meta.genres.some(g => g.id === genre.id || g.title.toLowerCase() === genre.title.toLowerCase())) return;
+    const updated = { ...meta, genres: [...meta.genres, genre] };
+    await this.updateSeriesMetadata(updated);
+  }
+
+  async addTagToSeries(seriesId: number, tag: { id: number; title: string }): Promise<void> {
+    const meta = await this.getSeriesMetadata(seriesId);
+    if (!meta) return;
+    // Check if tag already exists
+    if (meta.tags.some(t => t.id === tag.id || t.title.toLowerCase() === tag.title.toLowerCase())) return;
+    const updated = { ...meta, tags: [...meta.tags, tag] };
+    await this.updateSeriesMetadata(updated);
   }
 
   // ── Reading progress ─────────────────────────────────────────────────────────
