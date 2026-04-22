@@ -8,6 +8,7 @@ import {
   TextInput,
   Modal,
   ScrollView,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LibraryFactory } from '@/services/LibraryFactory';
@@ -72,19 +73,24 @@ export function CoverPickerModal({
 
   async function pickFromDevice() {
     try {
-      // Request permission on mobile
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Permission to access media library is required.');
-        return;
+      // Request permission on mobile (may fail on web, which is fine)
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          setError('Permission to access media library is required.');
+          return;
+        }
+      } catch (permError) {
+        // Permission request may fail on web - continue anyway
       }
 
       // Launch image picker with different aspect ratios for ebooks vs audiobooks
+      // Note: allowsEditing and aspect are only supported on native platforms
       const aspect: [number, number] = providerType === 'abs' ? [1, 1] : [2, 3];
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect,
+        allowsEditing: Platform.OS !== 'web',
+        aspect: Platform.OS !== 'web' ? aspect : undefined,
         quality: 0.9,
         base64: true,
       });
