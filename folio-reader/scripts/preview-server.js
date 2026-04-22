@@ -320,11 +320,10 @@ function handleABSCoverProxy(req, res) {
       const options = {
         hostname: absTarget.hostname,
         port: Number(absTarget.port) || (absTarget.protocol === 'https:' ? 443 : 80),
-        path: `/api/items/${itemId}/cover`,
+        path: `/api/items/${itemId}/cover?token=${token}`,
         method: 'POST',
         headers: {
           'Content-Type': `multipart/form-data; boundary=${boundary}`,
-          'Authorization': `Bearer ${token}`,
           'Content-Length': payload.length,
         },
       };
