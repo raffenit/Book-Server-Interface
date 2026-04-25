@@ -32,7 +32,7 @@ let kavitaUrl = process.argv[2] || process.env.KAVITA_URL || getEnvKavitaUrl();
 
 if (!kavitaUrl) {
   console.log('\n  [!] Warning: No KAVITA_URL or EXPO_PUBLIC_KAVITA_URL set.');
-  console.log('      /api/* proxy will be disabled, but /proxy dynamic mode is available.');
+  console.log('      /api/* proxy will be disabled, but /dynamic-proxy mode is available.');
   kavitaUrl = 'http://localhost:8050'; // dummy default
 }
 
@@ -103,6 +103,10 @@ function proxyRequest(req, res) {
     }
 
     const transport = targetUrl.protocol === 'https:' ? https : http;
+    
+    console.log(`[proxyRequest] Forwarding to ${targetToUse}${req.url}`);
+    console.log(`[proxyRequest] Target: ${targetUrl.hostname}:${options.port}${options.path}`);
+    
     const proxyReq = transport.request(options, (proxyRes) => {
       const headers = { ...proxyRes.headers };
       // Inject CORS headers
@@ -391,6 +395,7 @@ function dynamicProxy(req, res) {
   const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
   let targetParam = parsedUrl.searchParams.get('url');
   console.log(`[dynamic-proxy] Extracted targetParam: ${targetParam}`);
+  console.log(`[dynamic-proxy] DEBUG: Fix is loaded - will merge extra params`);
   
   if (!targetParam) {
     console.log(`[dynamic-proxy] ERROR: Missing url parameter`);
@@ -403,6 +408,14 @@ function dynamicProxy(req, res) {
   if (!/^https?:\/\//i.test(targetParam)) targetParam = 'http://' + targetParam;
   const targetUrl = new URL(targetParam);
   
+  // Merge additional query params (like pageNum) from the proxy request into the target URL
+  for (const [key, value] of parsedUrl.searchParams) {
+    if (key !== 'url') {
+      targetUrl.searchParams.set(key, value);
+      console.log(`[dynamic-proxy] Merging param: ${key}=${value}`);
+    }
+  }
+  
   const options = {
     hostname: targetUrl.hostname,
     port: Number(targetUrl.port) || (targetUrl.protocol === 'https:' ? 443 : 80),
@@ -414,6 +427,11 @@ function dynamicProxy(req, res) {
   // Hardening: Set a real-looking User-Agent if not provided
   if (!options.headers['user-agent']) {
     options.headers['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Folio/1.0';
+  }
+  
+  // Add Accept header for image requests
+  if (targetUrl.pathname.includes('/Reader/image')) {
+    options.headers['accept'] = 'image/webp,image/apng,image/png,image/jpeg,*/*';
   }
 
   // Stop headers that interfere with proxying or trigger anti-bot protections
@@ -432,10 +450,13 @@ function dynamicProxy(req, res) {
   
   options.headers.host = targetUrl.host;
 
-  console.log(`[dynamic-proxy] ${req.method} ${targetParam}`);
+  const finalUrl = targetUrl.toString();
+  console.log(`[dynamic-proxy] ${req.method} ${finalUrl}`);
+  console.log(`[dynamic-proxy] Target path: ${targetUrl.pathname}${targetUrl.search}`);
 
   const transport = targetUrl.protocol === 'https:' ? https : http;
   const proxyReq = transport.request(options, (proxyRes) => {
+    console.log(`[dynamic-proxy] Response status: ${proxyRes.statusCode}`);
     // Forward the status code and headers, allowing CORS
     const headers = { ...proxyRes.headers };
     headers['Access-Control-Allow-Origin'] = '*';
@@ -468,7 +489,7 @@ const server = http.createServer((req, res) => {
   const urlPath = req.url.split('?')[0];
   console.log(`[server] ${req.method} ${req.url} -> urlPath: ${urlPath}`);
 
-  if (urlPath === '/proxy' || urlPath.startsWith('/proxy?')) {
+  if (urlPath === '/proxy' || urlPath.startsWith('/proxy?') || urlPath === '/dynamic-proxy' || urlPath.startsWith('/dynamic-proxy?')) {
     console.log('[server] Routing to dynamicProxy');
     dynamicProxy(req, res);
   } else if (req.url === '/cover-proxy' && req.method === 'POST') {
@@ -496,7 +517,7 @@ function startServer(port) {
     console.log(`  -------------------------------------------`);
     console.log(`  Preview:  http://localhost:${port}`);
     console.log(`  Default:  /api/* → ${kavitaUrl}`);
-    console.log(`  Dynamic:  /proxy?url=<any-url>\n`);
+    console.log(`  Dynamic:  /proxy?url=<any-url> or /dynamic-proxy?url=<any-url>\n`);
   }).on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.log(`  [!] Port ${port} is in use, trying ${port + 1}...`);

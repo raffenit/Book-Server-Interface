@@ -18,6 +18,7 @@ import { CoverPickerModal } from '@/components/modals/CoverPickerModal';
 import { MetadataSearchModal } from '@/components/modals/MetadataSearchModal';
 import { MarkdownText } from '@/components/MarkdownText';
 import { startReadingSession, endReadingSession } from '@/services/stats';
+import { proxyUrl } from '@/config/proxy';
 
 import Slider from '@react-native-community/slider';
 
@@ -814,7 +815,7 @@ function ABSCoverPickerModal({ visible, itemId, title, onClose, onSaved }: any) 
     setError('');
     try {
       const olUrl = `https://openlibrary.org/search.json?title=${encodeURIComponent(q)}&limit=12&fields=title,cover_i`;
-      const res = await fetch(`/proxy?url=${encodeURIComponent(olUrl)}`);
+      const res = await fetch(proxyUrl(olUrl));
       if (!res.ok) throw new Error(`Search failed: ${res.status}`);
       const json = await res.json();
       const results = (json.docs ?? [])
@@ -884,7 +885,7 @@ function ABSCoverPickerModal({ visible, itemId, title, onClose, onSaved }: any) 
 
             <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', padding: Spacing.base, gap: Spacing.base }}>
               {searchResults.map(r => {
-                const thumbUrl = `/proxy?url=${encodeURIComponent(`https://covers.openlibrary.org/b/id/${r.coverId}-M.jpg`)}`;
+                const thumbUrl = proxyUrl(`https://covers.openlibrary.org/b/id/${r.coverId}-M.jpg`);
                 const fullUrl = `https://covers.openlibrary.org/b/id/${r.coverId}-M.jpg`;
                 return (
                   <TouchableOpacity 
@@ -1004,7 +1005,7 @@ function ABSMetadataSearchModal({ visible, itemId, initialTitle, onClose, onAppl
   async function searchGoogle(q: string): Promise<{ results: ABSMetaResult[]; warning?: string }> {
     const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8&printType=books`;
     try {
-      const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+      const res = await fetch(proxyUrl(url));
       if (!res.ok) {
         const msg = res.status === 429 ? 'rate-limited' : `returned error ${res.status}`;
         return { results: [], warning: `Google Books ${msg}.` };
@@ -1022,7 +1023,7 @@ function ABSMetadataSearchModal({ visible, itemId, initialTitle, onClose, onAppl
           description: v.description,
           genres: (v.categories ?? []).flatMap((c: string) => c.split('/')).map((s: string) => s.trim()).filter(Boolean),
           publisher: v.publisher,
-          coverUrl: thumbHttps ? `/proxy?url=${encodeURIComponent(thumbHttps)}` : undefined,
+          coverUrl: thumbHttps ? proxyUrl(thumbHttps) : undefined,
         };
       }),
     };

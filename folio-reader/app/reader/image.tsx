@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   StatusBar,
   Platform,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { WebView } from 'react-native-web-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { kavitaAPI, ChapterInfo } from '../../services/kavitaAPI';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -63,22 +63,68 @@ export default function ImageReaderScreen() {
   
   const [chapterInfo, setChapterInfo] = useState<ChapterInfo | null>(null);
 
-  // Fetch info once to populate the "suitcase"
+  // Fetch info once to populate the "suitcase" - wait for proxy to be ready
+  const proxyOrigin = kavitaAPI.getProxyOrigin();
   useEffect(() => {
+    if (!proxyOrigin) {
+      console.log('[ImageReader] Waiting for proxy to be ready...');
+      return;
+    }
+    console.log('[ImageReader] Proxy ready, fetching chapter info:', chapterId);
     (async () => {
-      const info = await kavitaAPI.getChapterInfo(chapterId);
-      setChapterInfo(info);
-      if (info) setTotalPages(info.pages);
+      try {
+        const info = await kavitaAPI.getChapterInfo(chapterId);
+        console.log('[ImageReader] Chapter info received:', info);
+        setChapterInfo(info);
+        if (info) setTotalPages(info.pages);
+      } catch (err: any) {
+        console.error('[ImageReader] Failed to fetch chapter info:', err?.message || err);
+        console.error('[ImageReader] Error details:', err?.response?.status, err?.response?.data);
+      }
     })();
-  }, [chapterId]);
+  }, [chapterId, proxyOrigin]);
 
   const token = kavitaAPI.getToken();
   // In proxy mode serverUrl is '' so these become relative URLs, proxied to Kavita
   const serverUrl = kavitaAPI.getServerUrl();
+  
+  // Helper to build API URL - uses proxy when available
+  const buildApiUrl = (path: string, params?: string) => {
+    const targetUrl = `${serverUrl}${path}${params ? '?' + params : ''}`;
+    console.log('[buildApiUrl] serverUrl:', serverUrl, 'proxyOrigin:', proxyOrigin, 'path:', path);
+    if (proxyOrigin) {
+      const proxiedUrl = `${proxyOrigin}${encodeURIComponent(targetUrl)}`;
+      console.log('[buildApiUrl] Using proxy:', proxiedUrl);
+      return proxiedUrl;
+    }
+    console.log('[buildApiUrl] Using direct URL:', targetUrl);
+    return targetUrl;
+  };
 
-  // Build the HTML template with current settings
-  const imageHtml = `
-<!DOCTYPE html>
+  // Memoize URL building to prevent rebuilding on every render
+  const { chapterInfoUrl, imageBaseUrl, apiKey } = useMemo(() => {
+    if (!proxyOrigin || !serverUrl) {
+      return { chapterInfoUrl: '', imageBaseUrl: '', apiKey: '' };
+    }
+    // Include apiKey in both URLs for authentication
+    const infoUrl = buildApiUrl('/api/Reader/chapter-info', `chapterId=${chapterId}&apiKey=${kavitaAPI.getApiKey()}`);
+    const imgUrl = buildApiUrl('/api/Reader/image', `bookId=${chapterId}&apiKey=${kavitaAPI.getApiKey()}`);
+    const key = kavitaAPI.getApiKey();
+    console.log('[ImageReader] URLs built - chapterInfoUrl:', infoUrl);
+    console.log('[ImageReader] imageBaseUrl (with apiKey):', imgUrl);
+    return { chapterInfoUrl: infoUrl, imageBaseUrl: imgUrl, apiKey: key };
+  }, [proxyOrigin, serverUrl, chapterId]);
+  
+  // Track render count to diagnose re-render loops
+  const renderCountRef = useRef(0);
+  renderCountRef.current++;
+  if (__DEV__ && renderCountRef.current % 10 === 0) {
+    console.log(`[ImageReader] Render count: ${renderCountRef.current}`);
+  }
+
+  // Build the HTML template with current settings - memoize to prevent rebuilds
+  const imageHtml = useMemo(() => {
+    return `<!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes">
@@ -150,29 +196,78 @@ export default function ImageReaderScreen() {
   <div id="viewer">
     <span id="spinner">Loading…</span>
     <div id="error-msg"></div>
+    <div id="debug-log" style="position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 12px; padding: 10px; max-height: 200px; overflow-y: auto; z-index: 9999;"></div>
     <img id="page-img" />
   </div>
   <script>
-    // These are now hardcoded into the string that the WebView loads
-    const TOKEN = '${token}';
-    const SERVER = '${serverUrl}';
-    const CHAPTER_ID = ${chapterId};
-    const API_KEY = '${kavitaAPI.getApiKey()}'; 
+    // Global error handler
+    window.onerror = function(msg, url, line, col, error) {
+      const el = document.getElementById('debug-log');
+      if (el) el.innerHTML += 'ERROR: ' + msg + ' at line ' + line + '<br>';
+      console.error('[WebView Error]', msg, 'line:', line);
+      return false;
+    };
+    
+    // Debug helper - visible on screen
+    function debug(msg) {
+      console.log('[WebView]', msg);
+      const el = document.getElementById('debug-log');
+      if (el) el.innerHTML += msg + '<br>';
+    }
+    
+    try {
+      debug('SCRIPT STARTING...');
+      // These are now hardcoded into the string that the WebView loads
+      const TOKEN = '${token}';
+      const CHAPTER_ID = ${chapterId};
+      const API_KEY = '${kavitaAPI.getApiKey()}';
+      const CHAPTER_INFO_URL = '${chapterInfoUrl}';
+      const IMAGE_BASE_URL = '${imageBaseUrl}';
+      const PRELOADED_CHAPTER_INFO_B64 = '${btoa(JSON.stringify(chapterInfo))}';
+      let PRELOADED_CHAPTER_INFO = null;
+      try {
+        // atob is available in browser WebView environment
+        PRELOADED_CHAPTER_INFO = JSON.parse(atob(PRELOADED_CHAPTER_INFO_B64));
+      } catch(e) {
+        debug('Failed to parse chapter info: ' + e.message);
+      }
+      
+      debug('PRELOADED_CHAPTER_INFO loaded: ' + (PRELOADED_CHAPTER_INFO ? 'yes' : 'no'));
+      if (PRELOADED_CHAPTER_INFO) {
+        debug('Pages: ' + (PRELOADED_CHAPTER_INFO.pages || PRELOADED_CHAPTER_INFO.pagesCount || 'unknown'));
+      }
 
     async function fetchPage(n) {
-      if (cache[n]) return cache[n];
+      debug('fetchPage(' + n + ') starting');
+      if (cache[n]) {
+        debug('fetchPage(' + n + ') - returning from cache');
+        return cache[n];
+      }
       
-      // Now these constants will be recognized because they were 
-      // 'baked in' to the string by the backticks above.
-      const url = SERVER + '/api/Reader/image?bookId=' + CHAPTER_ID + '&pageNum=' + n + '&apiKey=' + API_KEY;
+      // Use proxied URL if available, otherwise construct directly
+      const url = IMAGE_BASE_URL + '&pageNum=' + n;
+      debug('fetchPage(' + n + ') - URL: ' + url.substring(0, 100) + '...');
       
-      const resp = await fetch(url, { 
-        headers: { 'Authorization': 'Bearer ' + TOKEN } 
-      });
-      
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const blob = await resp.blob();
-      return URL.createObjectURL(blob);
+      try {
+        const resp = await fetch(url, { 
+          headers: { 'Authorization': 'Bearer ' + TOKEN } 
+        });
+        debug('fetchPage(' + n + ') - response status: ' + resp.status);
+        
+        if (!resp.ok) {
+          const text = await resp.text();
+          debug('fetchPage(' + n + ') - error response: ' + text.substring(0, 200));
+          throw new Error('HTTP ' + resp.status);
+        }
+        const blob = await resp.blob();
+        debug('fetchPage(' + n + ') - blob size: ' + blob.size);
+        const objUrl = URL.createObjectURL(blob);
+        cache[n] = objUrl;
+        return objUrl;
+      } catch(e) {
+        debug('fetchPage(' + n + ') - ERROR: ' + e.message);
+        throw e;
+      }
     }
     
     let currentPage = 0;
@@ -184,11 +279,17 @@ export default function ImageReaderScreen() {
     }
 
     async function showPage(n) {
-      if (n < 0 || n >= totalPages) return;
+      debug('showPage(' + n + ') starting - totalPages: ' + totalPages);
+      if (n < 0 || n >= totalPages) {
+        debug('showPage(' + n + ') - out of bounds, returning');
+        return;
+      }
       document.getElementById('spinner').style.display = 'block';
       document.getElementById('page-img').style.display = 'none';
       try {
+        debug('showPage(' + n + ') - calling fetchPage...');
         const src = await fetchPage(n);
+        debug('showPage(' + n + ') - got image URL, setting src...');
         const img = document.getElementById('page-img');
         img.src = src;
         img.style.display = 'block';
@@ -199,6 +300,7 @@ export default function ImageReaderScreen() {
         if (n + 1 < totalPages) fetchPage(n + 1).catch(() => {});
         if (n - 1 >= 0) fetchPage(n - 1).catch(() => {});
       } catch(e) {
+        debug('showPage(' + n + ') - ERROR: ' + e.message);
         document.getElementById('spinner').style.display = 'none';
         const errEl = document.getElementById('error-msg');
         errEl.textContent = 'Failed to load page: ' + e.message;
@@ -209,14 +311,26 @@ export default function ImageReaderScreen() {
 
     async function init() {
       try {
-        const infoUrl = SERVER + '/api/Reader/chapter-info?chapterId=' + CHAPTER_ID;
-        const resp = await fetch(infoUrl, { headers: { 'Authorization': 'Bearer ' + TOKEN } });
-        const info = await resp.json();
+        debug('init() starting');
+        let info;
+        debug('Checking PRELOADED_CHAPTER_INFO...');
+        if (PRELOADED_CHAPTER_INFO && (PRELOADED_CHAPTER_INFO.pages || PRELOADED_CHAPTER_INFO.pagesCount)) {
+          debug('Using preloaded chapter info');
+          info = PRELOADED_CHAPTER_INFO;
+        } else {
+          debug('Fetching chapter info from URL...');
+          const resp = await fetch(CHAPTER_INFO_URL, { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+          debug('Fetch response status: ' + resp.status);
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          info = await resp.json();
+        }
         totalPages = info.pages || info.pagesCount || 0;
+        console.log('[WebView] Total pages:', totalPages);
         notify({ type: 'total', total: totalPages });
         await showPage(0);
         notify({ type: 'loaded' });
       } catch(e) {
+        console.error('[WebView] init() failed:', e.message);
         document.getElementById('spinner').textContent = 'Error: ' + e.message;
         notify({ type: 'error', message: e.message });
       }
@@ -278,9 +392,16 @@ export default function ImageReaderScreen() {
     };
 
     init();
+    } catch(e) {
+      debug('Outer error: ' + e.message);
+      console.error('[WebView] Outer error:', e.message);
+    }
   </script>
 </body>
 </html>`;
+  // Dependencies: only rebuild HTML when these specific values change
+  // Using only primitives to avoid reference equality issues causing re-renders
+  }, [chapterId, chapterInfo?.pages, readingDirection, fitMode, colors.background]);
 
   function sendCmd(cmd: string) {
     webViewRef.current?.injectJavaScript(`${cmd}(); true;`);
@@ -413,8 +534,18 @@ export default function ImageReaderScreen() {
         </View>
       )}
 
+      {(() => {
+        // Log WebView render attempt
+        console.log('[ImageReader] Rendering WebView - HTML length:', imageHtml?.length || 0);
+        console.log('[ImageReader] WebView HTML starts with:', imageHtml?.substring(0, 50));
+        return null;
+      })()}
       <WebView
-        ref={webViewRef}
+        key={`webview-${chapterId}`}
+        ref={(ref) => {
+          webViewRef.current = ref;
+          console.log('[ImageReader] WebView ref set:', !!ref);
+        }}
         style={styles.webview}
         source={{ html: imageHtml }}
         javaScriptEnabled
@@ -423,6 +554,19 @@ export default function ImageReaderScreen() {
         mixedContentMode="always"
         originWhitelist={['*']}
         allowFileAccess
+        onLoad={() => console.log('[WebView] onLoad fired')}
+        onError={(e) => console.error('[WebView] onError:', e.nativeEvent)}
+        onLoadStart={() => console.log('[WebView] onLoadStart fired')}
+        onLoadEnd={() => console.log('[WebView] onLoadEnd fired')}
+        injectedJavaScriptBeforeContentLoaded={`
+          console.log('[WebView] HTML document starting to load');
+          window.addEventListener('DOMContentLoaded', function() {
+            console.log('[WebView] DOMContentLoaded fired');
+          });
+          window.addEventListener('error', function(e) {
+            console.error('[WebView] Window error:', e.message);
+          });
+        `}
       />
 
       {showHeader && totalPages > 0 && (

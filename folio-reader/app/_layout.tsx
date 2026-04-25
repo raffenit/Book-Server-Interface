@@ -117,16 +117,9 @@ function RootLayoutNav() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* Reader routes are handled by the nested reader/_layout.tsx */}
         <Stack.Screen
-          name="reader/pdf"
-          options={{
-            headerShown: false,
-            presentation: 'fullScreenModal',
-            animation: 'fade',
-          }}
-        />
-        <Stack.Screen
-          name="reader/epub"
+          name="reader"
           options={{
             headerShown: false,
             presentation: 'fullScreenModal',
@@ -138,11 +131,6 @@ function RootLayoutNav() {
         <Stack.Screen
           name="audiobook/[id]"
           options={{ headerShown: false, animation: 'slide_from_bottom' }}
-        />
-        {/* Series detail page with slide animation like turning pages */}
-        <Stack.Screen
-          name="(tabs)/series/[id]"
-          options={{ headerShown: false, animation: 'slide_from_right' }}
         />
       </Stack>
       <MiniPlayer />

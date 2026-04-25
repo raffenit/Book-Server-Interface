@@ -12,7 +12,8 @@ import {
 import { useRouter } from 'expo-router';
 import { LibraryFactory } from '../../services/LibraryFactory';
 import { LibraryGenre, LibraryTag, LibraryItem } from '../../services/LibraryProvider';
-import { SeriesCard, useGridColumns } from '../../components/SeriesCard';
+import { SeriesCard } from '../../components/SeriesCard';
+import { useGridColumns } from '../../hooks/useGridColumns';
 import SeriesContextMenu from '../../components/SeriesContextMenu';
 import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
 import { useAuth } from '../../contexts/AuthContext';

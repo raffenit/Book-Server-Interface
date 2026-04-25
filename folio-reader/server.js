@@ -151,7 +151,7 @@ const server = http.createServer((req, res) => {
   }
 
   // Handle proxy requests
-  if (parsedUrl.pathname === '/proxy') {
+  if (parsedUrl.pathname === '/proxy' || parsedUrl.pathname === '/dynamic-proxy') {
     handleProxy(req, res);
     return;
   }

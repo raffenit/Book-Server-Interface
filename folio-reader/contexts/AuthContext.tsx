@@ -3,6 +3,7 @@ import { kavitaAPI } from '../services/kavitaAPI';
 import { absAPI } from '../services/audiobookshelfAPI';
 import { storage } from '../services/storage';
 import { Platform } from 'react-native';
+import { PROXY_PATH } from '../config/proxy';
 
 export type ServerType = 'kavita' | 'abs' | null;
 
@@ -37,11 +38,11 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 /** On web the app is always cross-origin relative to the backend servers.
- *  Always route through the local /proxy?url= endpoint to bypass CORS. */
+ *  Always route through the local proxy endpoint to bypass CORS. */
 function enableWebProxy() {
   if (Platform.OS === 'web') {
-    kavitaAPI.setProxy('/proxy?url=');
-    absAPI.setProxy('/proxy?url=');
+    kavitaAPI.setProxy(PROXY_PATH);
+    absAPI.setProxy(PROXY_PATH);
   }
 }
 

@@ -17,7 +17,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useProfile, Profile } from '../../contexts/ProfileContext';
 import { kavitaAPI } from '../../services/kavitaAPI';
 import { absAPI } from '../../services/audiobookshelfAPI';
-import { Typography, Spacing, Radius, themes, themeLabels, fontLabels, fontPreviewFamily, selfHostedFonts, type ThemeName, type FontName, type ColorScheme } from '../../constants/theme';
+import { Typography, Spacing, Radius, themes, themeLabels, themeModeLabels, fontLabels, fontPreviewFamily, selfHostedFonts, type ThemeName, type ThemeMode, type FontName, type ColorScheme } from '../../constants/theme';
 import { STORAGE_KEYS } from '../../constants/config';
 import { storage } from '../../services/storage';
 import { exportProfiles, importProfiles, downloadBackupFile, loadBackupFile } from '../../services/backup';
@@ -410,7 +410,7 @@ function ABSConfigModal({ visible, onClose, onSuccess }: { visible: boolean; onC
       
       // Use getLibraries() instead of ping() — ping() bypasses the proxy and hits
       // the server directly, causing CORS failures on web. getLibraries() goes
-      // through /proxy?url= and also verifies the server is actually ABS.
+      // through /dynamic-proxy?url= and also verifies the server is actually ABS.
       const libraries = await absAPI.getLibraries();
       setStatusOk(true);
       const jwtMsg = jwtSuccess ? ' with progress tracking' : '';
@@ -974,7 +974,7 @@ function ProfileSection() {
 
 export default function SettingsScreen() {
   const { serverUrl, serverType, kavitaConnected, absConnected, logoutKavita, logoutABS, recheckConnections } = useAuth();
-  const { themeName, fontName, setTheme, setFont, colors, customFonts, setCustomFont, addCustomFont, removeCustomFont, activeCustomFontId, customThemeColors, setCustomTheme, uiGlowEnabled, uiAnimationsEnabled, setUiEffects, starfieldEnabled, setStarfieldEnabled } = useTheme();
+  const { themeName, themeMode, fontName, setTheme, setThemeMode, setFont, colors, customFonts, setCustomFont, addCustomFont, removeCustomFont, activeCustomFontId, customThemeColors, setCustomTheme, uiGlowEnabled, uiAnimationsEnabled, setUiEffects, starfieldEnabled, setStarfieldEnabled } = useTheme();
   const [customBg, setCustomBg] = useState(customThemeColors.bg);
   const [customAccent, setCustomAccent] = useState(customThemeColors.accent);
   const [customBgFocused, setCustomBgFocused] = useState(false);
@@ -1241,6 +1241,44 @@ export default function SettingsScreen() {
 
         {/* Appearance Settings */}
         <View style={styles.section}>
+          {/* Theme Mode Toggle */}
+          <View style={{ flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.lg, flexWrap: 'wrap' }}>
+            {(['light', 'dark', 'auto'] as ThemeMode[]).map((mode) => (
+              <TouchableOpacity
+                key={mode}
+                onPress={() => setThemeMode(mode)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: Spacing.xs,
+                  paddingHorizontal: Spacing.md,
+                  paddingVertical: Spacing.sm,
+                  borderRadius: Radius.md,
+                  backgroundColor: themeMode === mode ? colors.accentSoft : colors.surface,
+                  borderWidth: 1,
+                  borderColor: themeMode === mode ? colors.accent : colors.border,
+                }}
+              >
+                <Ionicons
+                  name={
+                    mode === 'light' ? 'sunny-outline' :
+                    mode === 'dark' ? 'moon-outline' :
+                    'contrast-outline'
+                  }
+                  size={18}
+                  color={themeMode === mode ? colors.accent : colors.textSecondary}
+                />
+                <Text style={{
+                  fontSize: Typography.sm,
+                  color: themeMode === mode ? colors.accent : colors.textPrimary,
+                  fontWeight: themeMode === mode ? Typography.semibold : Typography.regular,
+                }}>
+                  {themeModeLabels[mode]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Theme swatches */}
           <Text style={[styles.sectionNote, { marginBottom: Spacing.sm }]}>Color Theme</Text>
           <View style={{ flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.lg, flexWrap: 'wrap' }}>

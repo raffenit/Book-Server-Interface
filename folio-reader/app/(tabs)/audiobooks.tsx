@@ -15,247 +15,14 @@ import { useTheme } from '../../contexts/ThemeContext';
 import GenreTagContextMenu, { ChipType } from '../../components/GenreTagContextMenu';
 import SeriesContextMenu from '../../components/SeriesContextMenu';
 import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
+import { ContinueSection, ContinueItem } from '../../components/ContinueSection';
+import { AudiobookCard } from '../../components/AudiobookCard';
+import { FilterSection } from '../../components/FilterComponents';
+import { useGridColumns } from '../../hooks/useGridColumns';
 
 interface FilterItem {
   id: string;
   title: string;
-}
-
-// ── Filter Row Component (similar to index.tsx) ──
-function FilterRow({ label, items, selectedId, onSelect }: {
-  label: string;
-  items: FilterItem[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
-  const { colors } = useTheme();
-  const filterRowRef = React.useRef<View>(null);
-
-  return (
-    <View ref={filterRowRef} style={{ position: 'relative' }}>
-      {/* Gradient divider line */}
-      {Platform.OS === 'web' && (
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 1,
-          background: `radial-gradient(ellipse at center, ${colors.accent}50 0%, ${colors.secondary}55 25%, #8B6DB8 50%, #A85A95 75%, ${colors.secondary}65 100%)`,
-        }} />
-      )}
-      {Platform.OS !== 'web' && <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, backgroundColor: colors.border }} />}
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        {/* Fixed label */}
-        {Platform.OS === 'web' ? (
-          <span style={{
-            fontSize: Typography.xs,
-            fontWeight: Typography.bold,
-            textTransform: 'uppercase',
-            letterSpacing: 0.8,
-            marginLeft: Spacing.base,
-            marginRight: Spacing.xs,
-            minWidth: 48,
-            background: `radial-gradient(circle at 30% 30%, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}>{label}</span>
-        ) : (
-          <Text style={{ fontSize: Typography.xs, fontWeight: Typography.bold, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginLeft: Spacing.base, marginRight: Spacing.xs, minWidth: 48 }}>
-            {label}
-          </Text>
-        )}
-        {/* Scrollable chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', paddingRight: Spacing.base, paddingVertical: Spacing.md, gap: Spacing.xs }}
-        >
-          <GradientChip
-            label="All"
-            active={selectedId === null}
-            colors={colors}
-            onPress={() => onSelect(null)}
-          />
-          {items.map(item => (
-            <GradientChip
-              key={item.id}
-              label={item.title}
-              active={selectedId === item.id}
-              colors={colors}
-              onPress={() => onSelect(item.id)}
-            />
-          ))}
-        </ScrollView>
-      </View>
-    </View>
-  );
-}
-
-// ── Filter Row without label (for tabbed interface) ──
-function FilterRowNoLabel({ items, selectedId, onSelect, onChipContextMenu }: {
-  items: FilterItem[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-  onChipContextMenu?: (item: FilterItem, x: number, y: number) => void;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, paddingVertical: Spacing.sm, gap: Spacing.xs }}
-    >
-      <GradientChip
-        label="All"
-        active={selectedId === null}
-        colors={colors}
-        onPress={() => onSelect(null)}
-      />
-      {items.map(item => (
-        <GradientChip
-          key={item.id}
-          label={item.title}
-          active={selectedId === item.id}
-          colors={colors}
-          onPress={() => onSelect(item.id)}
-          onContextMenu={onChipContextMenu ? (x, y) => onChipContextMenu(item, x, y) : undefined}
-        />
-      ))}
-    </ScrollView>
-  );
-}
-
-// ── Compact Filter Row Component (condensed for 2-column layout) ──
-function CompactFilterRow({ label, items, selectedId, onSelect }: {
-  label: string;
-  items: FilterItem[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
-  const { colors } = useTheme();
-  
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <Text style={{ fontSize: 9, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, minWidth: 40 }}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 2 }}>
-        <TouchableOpacity
-          onPress={() => onSelect(null)}
-          style={{
-            paddingHorizontal: 6,
-            paddingVertical: 2,
-            borderRadius: Radius.sm,
-            backgroundColor: selectedId === null ? colors.accent : colors.surface,
-            borderWidth: 1,
-            borderColor: selectedId === null ? colors.accent : colors.border,
-          }}
-        >
-          <Text style={{ fontSize: 9, color: selectedId === null ? colors.textOnAccent : colors.textPrimary }}>All</Text>
-        </TouchableOpacity>
-        {items.slice(0, 5).map(item => (
-          <TouchableOpacity
-            key={item.id}
-            onPress={() => onSelect(item.id)}
-            style={{
-              paddingHorizontal: 6,
-              paddingVertical: 2,
-              borderRadius: Radius.sm,
-              backgroundColor: selectedId === item.id ? colors.accent : colors.surface,
-              borderWidth: 1,
-              borderColor: selectedId === item.id ? colors.accent : colors.border,
-            }}
-          >
-            <Text style={{ fontSize: 9, color: selectedId === item.id ? colors.textOnAccent : colors.textPrimary }} numberOfLines={1}>{item.title}</Text>
-          </TouchableOpacity>
-        ))}
-        {items.length > 5 && (
-          <Text style={{ fontSize: 9, color: colors.textMuted, paddingHorizontal: 2 }}>+{items.length - 5}</Text>
-        )}
-      </ScrollView>
-    </View>
-  );
-}
-
-// ── Gradient Chip Component ──
-function GradientChip({ label, active, colors, onPress, onContextMenu }: {
-  label: string;
-  active: boolean;
-  colors: any;
-  onPress: () => void;
-  onContextMenu?: (x: number, y: number) => void;
-}) {
-  const wrapperRef = React.useRef<HTMLDivElement | null>(null);
-  React.useEffect(() => {
-    if (Platform.OS !== 'web' || !onContextMenu) return;
-    const el = wrapperRef.current;
-    if (!el) return;
-    const handler = (e: MouseEvent) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); };
-    el.addEventListener('contextmenu', handler);
-    return () => el.removeEventListener('contextmenu', handler);
-  }, [onContextMenu]);
-
-  // Fixed gradient angle for consistent chip styling
-  const gradientAngle = 135; // Fixed diagonal angle
-
-  const gradientBorder = `linear-gradient(${gradientAngle}deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)`;
-  const textGradient = `linear-gradient(${gradientAngle}deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)`;
-
-  if (Platform.OS === 'web') {
-    return (
-      <div
-        ref={wrapperRef}
-        style={{
-          display: 'inline-block',
-          borderRadius: Radius.full,
-          padding: 1,
-          background: gradientBorder,
-          cursor: 'default',
-          userSelect: 'none',
-        }}
-      >
-        <TouchableOpacity
-          onPress={onPress}
-          onLongPress={onContextMenu ? (e) => onContextMenu(e.nativeEvent.pageX, e.nativeEvent.pageY) : undefined}
-          delayLongPress={400}
-          activeOpacity={1}
-        >
-          <View style={{
-            borderRadius: Radius.full,
-            paddingHorizontal: Spacing.md,
-            paddingVertical: 5,
-            backgroundColor: active ? 'transparent' : 'rgba(10, 12, 25, 0.85)',
-            background: active ? textGradient : undefined,
-          }}>
-            <span style={{
-              fontSize: Typography.sm,
-              fontWeight: active ? Typography.semibold : Typography.medium,
-              color: active ? '#1a1a2e' : 'transparent',
-              background: active ? 'none' : textGradient,
-              WebkitBackgroundClip: active ? 'border-box' : 'text',
-              WebkitTextFillColor: active ? '#1a1a2e' : 'transparent',
-              backgroundClip: active ? 'border-box' : 'text',
-              userSelect: 'none',
-              WebkitUserSelect: 'none',
-            }}>{label}</span>
-          </View>
-        </TouchableOpacity>
-      </div>
-    );
-  }
-
-  // Native fallback
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        { backgroundColor: 'rgba(10, 12, 25, 0.85)', borderRadius: Radius.full, paddingHorizontal: Spacing.md, paddingVertical: 5, borderWidth: 1, borderColor: active ? '#F5E6D3' : colors.border },
-        active && { backgroundColor: 'rgba(245, 230, 211, 0.95)', borderColor: '#F5E6D3' },
-      ]}
-      activeOpacity={0.85}
-    >
-      <Text style={{ fontSize: Typography.sm, fontWeight: active ? Typography.semibold : Typography.medium, color: active ? '#1a1a2e' : colors.textPrimary }}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
 }
 
 function formatDuration(seconds: number): string {
@@ -264,191 +31,6 @@ function formatDuration(seconds: number): string {
   const m = Math.floor((seconds % 3600) / 60);
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
-}
-
-// ── Continue Listening Card (horizontal scroll) ──
-function ContinueListeningCard({ item, onPress, onPlay, isPlaying }: {
-  item: LibraryItem;
-  onPress: () => void;
-  onPlay: () => void;
-  isPlaying: boolean;
-}) {
-  const { colors } = useTheme();
-  const progressPct = item.progress ? Math.round(item.progress * 100) : 0;
-  const provider = LibraryFactory.getProvider('abs');
-  const coverUri = (provider as any).getCoverUrl?.(item.id) || '';
-
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.9}
-      style={{ width: 130, marginRight: Spacing.sm }}
-    >
-      <View style={{ borderRadius: Radius.md, overflow: 'hidden', backgroundColor: '#1e2132' }}>
-        <View style={{ width: 130, aspectRatio: 1 }}>
-          <Image source={{ uri: coverUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-          {/* Gradient overlay at bottom */}
-          <View style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 40,
-            background: Platform.OS === 'web' 
-              ? `linear-gradient(to top, rgba(10,12,25,0.9) 0%, rgba(10,12,25,0.4) 60%, transparent 100%)`
-              : undefined,
-            backgroundColor: Platform.OS !== 'web' ? 'rgba(10,12,25,0.6)' : undefined,
-          } as any} />
-          {/* progress bar */}
-          <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <View style={{ width: `${progressPct}%`, height: '100%', backgroundColor: colors.accent }} />
-          </View>
-          {/* play button overlay */}
-          <TouchableOpacity
-            onPress={onPlay}
-            style={{
-              position: 'absolute',
-              bottom: 8,
-              right: 8,
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: 'rgba(0,0,0,0.6)',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-            hitSlop={8}
-          >
-            <Ionicons
-              name={isPlaying ? 'pause' : 'play'}
-              size={18}
-              color={colors.accent}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View style={{ marginTop: Spacing.xs }}>
-        <Text numberOfLines={2} style={{ fontSize: Typography.xs, color: colors.textPrimary, lineHeight: 15, fontWeight: Typography.medium }}>
-          {item.title}
-        </Text>
-        {item.author ? (
-          <Text numberOfLines={1} style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>
-            {item.author}
-          </Text>
-        ) : null}
-        <Text style={{ fontSize: 10, color: colors.accent, marginTop: 2 }}>
-          {progressPct}%
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-// ── Audiobook Card for Grid ──
-function AudiobookCard({ item, onPress, onPlay, isPlaying, cardWidth, onContextMenu }: {
-  item: LibraryItem;
-  onPress: () => void;
-  onPlay: () => void;
-  isPlaying: boolean;
-  cardWidth: number;
-  onContextMenu?: (itemId: string, itemTitle: string, x: number, y: number) => void;
-}) {
-  const { colors } = useTheme();
-  const progressPct = item.progress ? Math.round(item.progress * 100) : 0;
-  const provider = LibraryFactory.getProvider('abs');
-  const coverUri = (provider as any).getCoverUrl?.(item.id) || '';
-  const cardRef = React.useRef<View>(null);
-
-  React.useEffect(() => {
-    if (Platform.OS !== 'web' || !onContextMenu) return;
-    const el = cardRef.current as any as HTMLElement;
-    if (!el) return;
-    const handler = (e: MouseEvent) => {
-      e.preventDefault();
-      onContextMenu(item.id, item.title, e.clientX, e.clientY);
-    };
-    el.addEventListener('contextmenu', handler);
-    return () => el.removeEventListener('contextmenu', handler);
-  }, [onContextMenu, item.id, item.title]);
-
-  function handleLongPress(e: GestureResponderEvent) {
-    if (onContextMenu) {
-      onContextMenu(item.id, item.title, e.nativeEvent.pageX, e.nativeEvent.pageY);
-    }
-  }
-
-  return (
-    <TouchableOpacity 
-      ref={cardRef}
-      style={[styles.card, { width: cardWidth, backgroundColor: '#1e2132', borderColor: 'rgba(255, 255, 255, 0.08)' }, Platform.OS === 'web' && (styles.cardHover as any)]} 
-      onPress={onPress} 
-      onLongPress={onContextMenu ? handleLongPress : undefined}
-      delayLongPress={400}
-      activeOpacity={0.85}
-      {...(Platform.OS === 'web' ? { className: 'audiobook-card-hover' } : {})}
-    >
-      <View style={{ aspectRatio: 1, width: '100%' }}>
-        <Image source={{ uri: coverUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-        {/* progress bar */}
-        {progressPct > 0 && progressPct < 100 && (
-          <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <View style={{ width: `${progressPct}%`, height: '100%', backgroundColor: colors.accent }} />
-          </View>
-        )}
-        {/* play button overlay */}
-        <TouchableOpacity 
-          onPress={onPlay} 
-          style={{
-            position: 'absolute',
-            bottom: 8,
-            right: 8,
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={isPlaying ? 'pause' : 'play'}
-            size={18}
-            color={colors.accent}
-          />
-        </TouchableOpacity>
-      </View>
-      <View style={{ padding: Spacing.sm }}>
-        <Text numberOfLines={2} style={{ fontSize: Typography.xs, color: colors.textPrimary, lineHeight: 15, fontWeight: Typography.medium }}>
-          {item.title}
-        </Text>
-        {item.author ? (
-          <Text numberOfLines={1} style={{ fontSize: Typography.xs, color: colors.textSecondary, marginTop: 2 }}>
-            {item.author}
-          </Text>
-        ) : null}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-// Grid calculation
-const GAP = Spacing.sm;
-const SIDE_MARGIN = Spacing.base;
-
-function useGridColumns() {
-  const { width } = useWindowDimensions();
-  // Account for scrollbar width on web to prevent grid from being cut off
-  const SCROLLBAR_WIDTH = Platform.OS === 'web' ? 16 : 0;
-  const availableWidth = width - SCROLLBAR_WIDTH;
-  const numColumns =
-    availableWidth >= 1600 ? 8 :
-    availableWidth >= 1280 ? 7 :
-    availableWidth >= 960  ? 6 :
-    availableWidth >= 700  ? 5 :
-    availableWidth >= 500  ? 4 : 3;
-  const cardWidth = (availableWidth - SIDE_MARGIN * 2 - GAP * (numColumns - 1)) / numColumns;
-  return { numColumns, cardWidth };
 }
 
 export default function AudiobooksScreen() {
@@ -555,8 +137,8 @@ export default function AudiobooksScreen() {
         .map((c: any) => ({ id: c.id, title: c.name || c.title }))
         .sort((a: FilterItem, b: FilterItem) => a.title.localeCompare(b.title));
       setCollections(collectionItems);
-    } catch (e) {
-      console.error('[Audiobooks] Failed to fetch collections:', e);
+    } catch {
+      // Failed to fetch collections
     }
   }, []);
 
@@ -572,8 +154,7 @@ export default function AudiobooksScreen() {
         if (id) itemIds.add(String(id));
       });
       setCollectionItems(itemIds);
-    } catch (e) {
-      console.error('[Audiobooks] Failed to fetch collection items:', e);
+    } catch {
       setCollectionItems(new Set());
     }
   }, []);
@@ -612,11 +193,9 @@ export default function AudiobooksScreen() {
   }, [selectedGenreId, selectedAuthorId, selectedTagId, selectedCollectionId, collectionItems]);
 
   const fetchItems = useCallback(async (libraryId: string, pageNum: number, reset: boolean) => {
-    console.log('[Audiobooks] fetchItems called with libraryId:', libraryId, 'page:', pageNum);
     try {
       const provider = LibraryFactory.getProvider('abs');
       const data = await provider.getLibraryItems({ libraryId, page: pageNum, limit: 40 });
-      console.log('[Audiobooks] Fetched', data.length, 'items from library', libraryId);
       
       if (reset) {
         setAllItems(data);
@@ -635,7 +214,7 @@ export default function AudiobooksScreen() {
       setPage(pageNum);
       setHasMore(data.length === 40);
     } catch (e: any) {
-      console.error('[Audiobooks] Failed to fetch audiobook items:', e);
+      // Failed to fetch audiobook items
       const isNetworkError = !e.response && (e.code === 'ECONNABORTED' || e.message?.includes('Network Error') || e.message?.includes('timeout'));
       if (isNetworkError) {
         setNetworkError('Server unreachable. Check your connection or ABS server URL in Settings.');
@@ -648,15 +227,12 @@ export default function AudiobooksScreen() {
   }, [extractFilters, filterItems]);
 
   const initialize = useCallback(async () => {
-    console.log('[Audiobooks] Starting initialization...');
     setLoading(true);
     const provider = LibraryFactory.getProvider('abs');
     await provider.initialize();
     
     const isAuth = await provider.isAuthenticated();
-    console.log('[Audiobooks] isAuthenticated:', isAuth);
     if (!isAuth) {
-      console.log('[Audiobooks] Not authenticated, showing not connected');
       setConnected(false);
       setLoading(false);
       return;
@@ -666,15 +242,12 @@ export default function AudiobooksScreen() {
     try {
       // Libraries are still ABS specific for this tab's picker
       const { absAPI } = await import('../../services/audiobookshelfAPI');
-      console.log('[Audiobooks] Fetching libraries from absAPI...');
       const libs = await absAPI.getLibraries();
-      console.log('[Audiobooks] Got', libs.length, 'libraries:', libs.map(l => ({ id: l.id, name: l.name, mediaType: l.mediaType })));
       setLibraries(libs);
       
       const currentLib = selectedLibraryId && libs.some(l => l.id === selectedLibraryId) 
         ? selectedLibraryId 
         : libs[0]?.id ?? null;
-      console.log('[Audiobooks] Selected library:', currentLib);
       
       if (currentLib && currentLib !== selectedLibraryId) {
         setSelectedLibraryId(currentLib);
@@ -684,11 +257,10 @@ export default function AudiobooksScreen() {
         // Fetch collections for the filter row
         fetchCollections();
       } else {
-        console.log('[Audiobooks] No library selected, stopping load');
         setLoading(false);
       }
     } catch (err: any) {
-      console.error('[Audiobooks] Initialization error:', err);
+      // Initialization error
       const isNetworkError = !err.response && (err.code === 'ECONNABORTED' || err.message?.includes('Network Error') || err.message?.includes('timeout'));
       if (isNetworkError) {
         setNetworkError('Server unreachable. Check your connection or ABS server URL in Settings.');
@@ -708,7 +280,6 @@ export default function AudiobooksScreen() {
   // Refresh when playback is stopped (to sync progress bars)
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('FOLIO_PLAYBACK_STOPPED', () => {
-      console.log('[AudiobooksScreen] Playback stop detected, refreshing library...');
       if (selectedLibraryId) {
         fetchItems(selectedLibraryId, 0, true);
       }
@@ -760,9 +331,11 @@ export default function AudiobooksScreen() {
 
   // Continue listening: items with progress > 0 and < 100%
   const continueListening = useMemo(() => {
-    return allItems.filter(item => item.progress && item.progress > 0 && item.progress < 1)
+    const withProgress = allItems.filter(item => item.progress && item.progress > 0 && item.progress < 1)
       .sort((a, b) => (b.progress || 0) - (a.progress || 0))
       .slice(0, 10);
+    console.log('[ContinueListening] Total items:', allItems.length, 'With progress:', withProgress.length, 'Sample progress values:', allItems.slice(0, 3).map(i => ({ title: i.title?.substring(0, 20), progress: i.progress })));
+    return withProgress;
   }, [allItems]);
 
   async function handlePlay(item: LibraryItem) {
@@ -798,7 +371,7 @@ export default function AudiobooksScreen() {
   return (
     <View style={[styles.container, {
       zIndex: 1,
-      backgroundColor: Platform.OS === 'web' ? 'rgba(5, 6, 15, 0.15)' : colors.background,
+      backgroundColor: Platform.OS === 'web' ? colors.overlay : colors.background,
     } as any]}>
       <TabHeader 
         title="Audiobooks" 
@@ -807,7 +380,6 @@ export default function AudiobooksScreen() {
         hasMore={hasMore} 
         serverName="Audiobookshelf" 
       />
-      <View style={{ height: Spacing.md }} />
 
       {networkError && items.length === 0 ? (
         <View style={[styles.centered, { padding: Spacing.xl }]}>
@@ -833,6 +405,28 @@ export default function AudiobooksScreen() {
           <ActivityIndicator color={colors.accent} size="large" />
         </View>
       ) : (
+        <>
+          {/* Filter Section - Outside margin container for full width */}
+          <FilterSection
+            libraries={libraries}
+            genres={genres}
+            authors={authors}
+            tags={tags}
+            collections={collections}
+            selectedLibraryId={selectedLibraryId}
+            selectedGenreId={selectedGenreId}
+            selectedAuthorId={selectedAuthorId}
+            selectedTagId={selectedTagId}
+            selectedCollectionId={selectedCollectionId}
+            onSelectLibrary={selectLibrary}
+            onSelectGenre={(id) => setSelectedGenreId(id as string | null)}
+            onSelectAuthor={(id) => setSelectedAuthorId(id as string | null)}
+            onSelectTag={(id) => setSelectedTagId(id as string | null)}
+            onSelectCollection={(id) => setSelectedCollectionId(id as string | null)}
+            defaultTab="library"
+            onClearAll={() => { selectLibrary(null); setSelectedGenreId(null); setSelectedAuthorId(null); setSelectedTagId(null); setSelectedCollectionId(null); }}
+          />
+
         <View style={{ flex: 1, marginHorizontal: Spacing.base }}>
           <FlatList
             key={numColumns}
@@ -847,356 +441,21 @@ export default function AudiobooksScreen() {
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.accent} style={{ padding: Spacing.xl }} /> : null}
           ListHeaderComponent={
             <View>
-              {/* ── Continue Listening section ── */}
-              {continueListening.length > 0 && (
-                <View style={{ marginBottom: Spacing.xl }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, marginBottom: Spacing.md, gap: Spacing.sm }}>
-                    <Text style={{ fontSize: Typography.md, fontWeight: Typography.bold, color: colors.textPrimary }}>
-                      Continue Listening
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent }} />
-                      <Text style={{ fontSize: Typography.xs, color: colors.textMuted }}>{continueListening.length} in progress</Text>
-                    </View>
-                  </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: 4 }}
-                  >
-                    {continueListening.map((item) => (
-                      <ContinueListeningCard
-                        key={item.id}
-                        item={item}
-                        onPress={() => router.push(`/audiobook/${item.id}`)}
-                        onPlay={() => handlePlay(item)}
-                        isPlaying={isPlaying && nowPlaying?.item.id === item.id}
-                      />
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Filter Section with Gradient Background */}
-              <View style={{
-                marginHorizontal: Spacing.base,
-                marginBottom: Spacing.md,
-                borderRadius: Radius.lg,
-                backgroundColor: Platform.OS === 'web' ? 'rgba(20, 22, 40, 0.6)' : colors.surface,
-                borderWidth: 1,
-                borderColor: colors.border,
-                overflow: 'hidden',
-              }}>
-                {/* Gradient overlay for web - subtle rainbow like chips */}
-              {Platform.OS === 'web' && (
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background: `radial-gradient(ellipse at 30% 20%, ${colors.accent}10 0%, transparent 50%),
-                               radial-gradient(ellipse at 70% 80%, ${colors.secondary}12 0%, transparent 50%),
-                               radial-gradient(ellipse at 50% 50%, rgba(139, 109, 184, 0.08) 0%, transparent 60%),
-                               radial-gradient(ellipse at 80% 30%, rgba(168, 90, 149, 0.08) 0%, transparent 50%)`,
-                  borderRadius: Radius.lg,
-                  pointerEvents: 'none',
-                }} />
-              )}  
-
-                {/* Tab Navigation - Styled as actual tabs */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: Spacing.sm, paddingTop: Spacing.sm, gap: 4 }}>
-                    {libraries.length > 0 && (
-                      <TouchableOpacity
-                        onPress={() => setActiveFilterTab('library')}
-                        style={{
-                          paddingHorizontal: Spacing.md,
-                          paddingVertical: Spacing.sm,
-                          borderTopLeftRadius: Radius.md,
-                          borderTopRightRadius: Radius.md,
-                          borderBottomLeftRadius: 0,
-                          borderBottomRightRadius: 0,
-                          backgroundColor: activeFilterTab === 'library' && Platform.OS !== 'web' ? colors.accent : 'transparent',
-                          ...(Platform.OS === 'web' && activeFilterTab === 'library' ? { background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)` } : {}),
-                          borderLeftWidth: activeFilterTab === 'library' ? 1 : 0,
-                          borderRightWidth: activeFilterTab === 'library' ? 1 : 0,
-                          borderLeftColor: colors.border,
-                          borderRightColor: colors.border,
-                          marginBottom: -1,
-                          zIndex: activeFilterTab === 'library' ? 1 : 0,
-                        }}
-                      >
-                        <Text style={{
-                          fontSize: Typography.sm,
-                          color: activeFilterTab === 'library' ? colors.textOnAccent : colors.textSecondary,
-                          fontWeight: activeFilterTab === 'library' ? '600' : '400',
-                        }}>Library</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      onPress={() => setActiveFilterTab('genre')}
-                      style={{
-                        paddingHorizontal: Spacing.md,
-                        paddingVertical: Spacing.sm,
-                        borderTopLeftRadius: Radius.md,
-                        borderTopRightRadius: Radius.md,
-                        borderBottomLeftRadius: 0,
-                        borderBottomRightRadius: 0,
-                        backgroundColor: activeFilterTab === 'genre' && Platform.OS !== 'web' ? colors.accent : 'transparent',
-                        ...(Platform.OS === 'web' && activeFilterTab === 'genre' ? { background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)` } : {}),
-                        borderLeftWidth: activeFilterTab === 'genre' ? 1 : 0,
-                        borderRightWidth: activeFilterTab === 'genre' ? 1 : 0,
-                        borderLeftColor: colors.border,
-                        borderRightColor: colors.border,
-                        marginBottom: -1,
-                        zIndex: activeFilterTab === 'genre' ? 1 : 0,
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: Typography.sm,
-                        color: activeFilterTab === 'genre' ? colors.textOnAccent : colors.textSecondary,
-                        fontWeight: activeFilterTab === 'genre' ? '600' : '400',
-                      }}>Genre</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setActiveFilterTab('author')}
-                      style={{
-                        paddingHorizontal: Spacing.md,
-                        paddingVertical: Spacing.sm,
-                        borderTopLeftRadius: Radius.md,
-                        borderTopRightRadius: Radius.md,
-                        borderBottomLeftRadius: 0,
-                        borderBottomRightRadius: 0,
-                        backgroundColor: activeFilterTab === 'author' && Platform.OS !== 'web' ? colors.accent : 'transparent',
-                        ...(Platform.OS === 'web' && activeFilterTab === 'author' ? { background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)` } : {}),
-                        borderLeftWidth: activeFilterTab === 'author' ? 1 : 0,
-                        borderRightWidth: activeFilterTab === 'author' ? 1 : 0,
-                        borderLeftColor: colors.border,
-                        borderRightColor: colors.border,
-                        marginBottom: -1,
-                        zIndex: activeFilterTab === 'author' ? 1 : 0,
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: Typography.sm,
-                        color: activeFilterTab === 'author' ? colors.textOnAccent : colors.textSecondary,
-                        fontWeight: activeFilterTab === 'author' ? '600' : '400',
-                      }}>Author</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setActiveFilterTab('tag')}
-                      style={{
-                        paddingHorizontal: Spacing.md,
-                        paddingVertical: Spacing.sm,
-                        borderTopLeftRadius: Radius.md,
-                        borderTopRightRadius: Radius.md,
-                        borderBottomLeftRadius: 0,
-                        borderBottomRightRadius: 0,
-                        backgroundColor: activeFilterTab === 'tag' && Platform.OS !== 'web' ? colors.accent : 'transparent',
-                        ...(Platform.OS === 'web' && activeFilterTab === 'tag' ? { background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)` } : {}),
-                        borderLeftWidth: activeFilterTab === 'tag' ? 1 : 0,
-                        borderRightWidth: activeFilterTab === 'tag' ? 1 : 0,
-                        borderLeftColor: colors.border,
-                        borderRightColor: colors.border,
-                        marginBottom: -1,
-                        zIndex: activeFilterTab === 'tag' ? 1 : 0,
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: Typography.sm,
-                        color: activeFilterTab === 'tag' ? colors.textOnAccent : colors.textSecondary,
-                        fontWeight: activeFilterTab === 'tag' ? '600' : '400',
-                      }}>Tag</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setActiveFilterTab('collection')}
-                      style={{
-                        paddingHorizontal: Spacing.md,
-                        paddingVertical: Spacing.sm,
-                        borderTopLeftRadius: Radius.md,
-                        borderTopRightRadius: Radius.md,
-                        borderBottomLeftRadius: 0,
-                        borderBottomRightRadius: 0,
-                        backgroundColor: activeFilterTab === 'collection' && Platform.OS !== 'web' ? colors.accent : 'transparent',
-                        ...(Platform.OS === 'web' && activeFilterTab === 'collection' ? { background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.secondary} 40%, #8B6DB8 70%, #A85A95 100%)` } : {}),
-                        borderLeftWidth: activeFilterTab === 'collection' ? 1 : 0,
-                        borderRightWidth: activeFilterTab === 'collection' ? 1 : 0,
-                        borderLeftColor: colors.border,
-                        borderRightColor: colors.border,
-                        marginBottom: -1,
-                        zIndex: activeFilterTab === 'collection' ? 1 : 0,
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: Typography.sm,
-                        color: activeFilterTab === 'collection' ? colors.textOnAccent : colors.textSecondary,
-                        fontWeight: activeFilterTab === 'collection' ? '600' : '400',
-                      }}>Collection</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-
-                  {/* Tab Content Area */}
-                  <View style={{
-                    borderTopWidth: 1,
-                    borderTopColor: colors.accent,
-                    backgroundColor: Platform.OS === 'web' ? 'rgba(20, 22, 40, 0.4)' : colors.surface,
-                    paddingVertical: Spacing.sm,
-                  }}>
-                    {activeFilterTab === 'library' && libraries.length > 0 && (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.xs, paddingHorizontal: Spacing.base }}>
-                        <TouchableOpacity
-                          onPress={() => selectLibrary(null)}
-                          style={{
-                            paddingHorizontal: Spacing.md,
-                            paddingVertical: Spacing.sm,
-                            borderRadius: Radius.md,
-                            backgroundColor: selectedLibraryId === null ? colors.accent : colors.surface,
-                            borderWidth: 1,
-                            borderColor: selectedLibraryId === null ? colors.accent : colors.border,
-                          }}
-                        >
-                          <Text style={{ fontSize: Typography.sm, color: selectedLibraryId === null ? colors.textOnAccent : colors.textPrimary }}>All Libraries</Text>
-                        </TouchableOpacity>
-                        {libraries.map(lib => (
-                          <TouchableOpacity
-                            key={lib.id}
-                            onPress={() => selectLibrary(String(lib.id))}
-                            style={{
-                              paddingHorizontal: Spacing.md,
-                              paddingVertical: Spacing.sm,
-                              borderRadius: Radius.md,
-                              backgroundColor: selectedLibraryId === String(lib.id) ? colors.accent : colors.surface,
-                              borderWidth: 1,
-                              borderColor: selectedLibraryId === String(lib.id) ? colors.accent : colors.border,
-                            }}
-                          >
-                            <Text style={{ fontSize: Typography.sm, color: selectedLibraryId === String(lib.id) ? colors.textOnAccent : colors.textPrimary }}>{lib.name}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    )}
-                    {activeFilterTab === 'genre' && (
-                      <FilterRowNoLabel items={genres} selectedId={selectedGenreId} onSelect={setSelectedGenreId} />
-                    )}
-                    {activeFilterTab === 'author' && (
-                      <FilterRowNoLabel items={authors} selectedId={selectedAuthorId} onSelect={setSelectedAuthorId} />
-                    )}
-                    {activeFilterTab === 'tag' && (
-                      <FilterRowNoLabel items={tags} selectedId={selectedTagId} onSelect={setSelectedTagId} />
-                    )}
-                    {activeFilterTab === 'collection' && (
-                      <FilterRowNoLabel items={collections} selectedId={selectedCollectionId} onSelect={setSelectedCollectionId} />
-                    )}
-                  </View>
-                </View>
-
-              {/* Active Filters */}
-              {(selectedGenreId || selectedAuthorId || selectedTagId || selectedCollectionId) && (
-                <View style={{ paddingHorizontal: Spacing.base, paddingBottom: Spacing.md, paddingTop: Spacing.xs }}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.xs, alignItems: 'center' }}>
-                    <Text style={{ fontSize: Typography.xs, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Active:</Text>
-                    {selectedLibraryId !== null && selectedLibraryId !== undefined && (
-                      <TouchableOpacity
-                        onPress={() => selectLibrary(null)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: Spacing.sm,
-                          paddingVertical: 4,
-                          borderRadius: Radius.md,
-                          backgroundColor: colors.accent,
-                        }}
-                      >
-                        <Text style={{ fontSize: Typography.xs, color: colors.textOnAccent }}>
-                          {libraries.find(l => String(l.id) === String(selectedLibraryId))?.name || 'Library'}
-                        </Text>
-                        <Ionicons name="close-circle" size={14} color={colors.textOnAccent} />
-                      </TouchableOpacity>
-                    )}
-                    {selectedGenreId && (
-                      <TouchableOpacity
-                        onPress={() => setSelectedGenreId(null)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: Spacing.sm,
-                          paddingVertical: 4,
-                          borderRadius: Radius.md,
-                          backgroundColor: colors.accent,
-                        }}
-                      >
-                        <Text style={{ fontSize: Typography.xs, color: colors.textOnAccent }}>
-                          {genres.find(g => g.id === selectedGenreId)?.title || 'Genre'}
-                        </Text>
-                        <Ionicons name="close-circle" size={14} color={colors.textOnAccent} />
-                      </TouchableOpacity>
-                    )}
-                    {selectedAuthorId && (
-                      <TouchableOpacity
-                        onPress={() => setSelectedAuthorId(null)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: Spacing.sm,
-                          paddingVertical: 4,
-                          borderRadius: Radius.md,
-                          backgroundColor: colors.accent,
-                        }}
-                      >
-                        <Text style={{ fontSize: Typography.xs, color: colors.textOnAccent }}>
-                          {authors.find(a => a.id === selectedAuthorId)?.title || 'Author'}
-                        </Text>
-                        <Ionicons name="close-circle" size={14} color={colors.textOnAccent} />
-                      </TouchableOpacity>
-                    )}
-                    {selectedTagId && (
-                      <TouchableOpacity
-                        onPress={() => setSelectedTagId(null)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: Spacing.sm,
-                          paddingVertical: 4,
-                          borderRadius: Radius.md,
-                          backgroundColor: colors.accent,
-                        }}
-                      >
-                        <Text style={{ fontSize: Typography.xs, color: colors.textOnAccent }}>
-                          {tags.find(t => t.id === selectedTagId)?.title || 'Tag'}
-                        </Text>
-                        <Ionicons name="close-circle" size={14} color={colors.textOnAccent} />
-                      </TouchableOpacity>
-                    )}
-                    {selectedCollectionId && (
-                      <TouchableOpacity
-                        onPress={() => setSelectedCollectionId(null)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: Spacing.sm,
-                          paddingVertical: 4,
-                          borderRadius: Radius.md,
-                          backgroundColor: colors.accent,
-                        }}
-                      >
-                        <Text style={{ fontSize: Typography.xs, color: colors.textOnAccent }}>
-                          {collections.find(c => c.id === selectedCollectionId)?.title || 'Collection'}
-                        </Text>
-                        <Ionicons name="close-circle" size={14} color={colors.textOnAccent} />
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity onPress={() => { setSelectedGenreId(null); setSelectedAuthorId(null); setSelectedTagId(null); setSelectedCollectionId(null); setSelectedLibraryId(null); }}>
-                      <Text style={{ fontSize: Typography.xs, color: colors.accent, fontWeight: Typography.medium }}>Clear all</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-                  <Text style={{ fontSize: Typography.sm, color: colors.textMuted, marginTop: Spacing.xs }}>
-                    {items.length} result{items.length !== 1 ? 's' : ''}
-                  </Text>
-                </View>
-              )}
+              {(() => {
+                console.log('[ContinueSection] Rendering with items:', continueListening.length, continueListening.map(i => ({ id: i.id, title: i.title?.substring(0, 20), progress: i.progress })));
+                return null;
+              })()}
+              <ContinueSection
+                title="Continue Listening"
+                items={continueListening.map((item): ContinueItem => ({
+                  id: item.id,
+                  title: item.title,
+                  subtitle: item.author,
+                  coverUrl: (LibraryFactory.getProvider('abs') as any).getCoverUrl?.(item.id) || '',
+                  progress: item.progress ? item.progress * 100 : 0,
+                }))}
+                onPressItem={(item) => router.push(`/audiobook/${item.id}`)}
+              />
             </View>
           }
           ListEmptyComponent={
@@ -1215,8 +474,8 @@ export default function AudiobooksScreen() {
                     try {
                       await absAPI.scanAllLibraries();
                       setTimeout(() => onRefresh(), 2000);
-                    } catch (e) {
-                      console.error('ABS Scan failed', e);
+                    } catch {
+                      // ABS Scan failed
                     }
                   }}
                   activeOpacity={0.8}
@@ -1239,6 +498,7 @@ export default function AudiobooksScreen() {
           )}
         />
         </View>
+      </>
       )}
 
       <GenreTagContextMenu
@@ -1326,9 +586,9 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: '#1e2132',
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: Colors.border,
   },
   // Web hover effect placeholder - real styling via CSS class
   cardHover: {} as any,

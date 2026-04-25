@@ -93,19 +93,6 @@ export default function TabHeader({ title, count, countLabel, hasMore, serverNam
         </View>
       </View>
       
-      {/* Library picker - more compact */}
-      {libraries && libraries.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: Spacing.sm, marginHorizontal: -Spacing.base }} contentContainerStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.xs }}>
-          {libraries.map(lib => {
-            const isActive = selectedLibraryId === lib.id;
-            return (
-              <TouchableOpacity key={lib.id} onPress={() => onSelectLibrary?.(lib.id)} style={{ backgroundColor: isActive ? colors.accentSoft : 'transparent', borderWidth: 1, borderColor: isActive ? colors.accent : colors.border, borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 4 } as any}>
-                <Text style={{ color: isActive ? colors.accent : colors.textSecondary, fontWeight: isActive ? Typography.semibold : Typography.medium, fontSize: Typography.xs }}>{lib.name}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
-      )}
     </View>
   );
 }

@@ -11,7 +11,8 @@ import {
 import { useRouter } from 'expo-router';
 import { LibraryFactory } from '../../services/LibraryFactory';
 import { Library, LibraryItem } from '../../services/LibraryProvider';
-import { SeriesCard, useGridColumns } from '../../components/SeriesCard';
+import { SeriesCard } from '../../components/SeriesCard';
+import { useGridColumns } from '../../hooks/useGridColumns';
 import SeriesContextMenu from '../../components/SeriesContextMenu';
 import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
 import { useAuth } from '../../contexts/AuthContext';
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   pill: {
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(10, 12, 25, 0.85)',
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.sm,
@@ -261,16 +262,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pillActive: {
-    backgroundColor: Colors.accentSoft,
-    borderColor: Colors.accent,
+    backgroundColor: 'rgba(245, 230, 211, 0.95)',
+    borderColor: '#F5E6D3',
   },
   pillText: {
     fontSize: Typography.sm,
-    fontWeight: Typography.semibold,
+    fontWeight: Typography.medium,
     color: Colors.textSecondary,
   },
   pillTextActive: {
-    color: Colors.accent,
+    color: '#1a1a2e',
+    fontWeight: Typography.semibold,
   },
   pillType: {
     fontSize: 10,
@@ -278,7 +280,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   pillTypeActive: {
-    color: Colors.accentDim,
+    color: '#1a1a2e',
+    opacity: 0.7,
   },
   grid: {
     paddingHorizontal: Spacing.base,

@@ -10,21 +10,28 @@ export function useLibraryItem(id: string | number, type: 'kavita' | 'abs') {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    // Skip if no valid id provided
+    if (id === undefined || id === null || id === '') {
+      setLoading(false);
+      setError('No item ID provided');
+      return;
+    }
+
     // Cancel any pending request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
+
     // Create new abort controller for this request
     abortControllerRef.current = new AbortController();
-    
+
     try {
       setLoading(true);
       setError(null);
       setData(null); // Clear previous data to prevent showing old book
       const currentProvider = LibraryFactory.getProvider(type);
       setProvider(currentProvider);
-      
+
       const detail = await currentProvider.getSeriesDetail(id);
       
       // Only update state if request wasn't aborted

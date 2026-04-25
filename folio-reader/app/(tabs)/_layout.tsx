@@ -1,12 +1,57 @@
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { getRainbowGradient } from '../../constants/theme';
 import { View, Platform } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 
 // Visible tabs in order for swipe navigation
 const VISIBLE_TABS = ['index', 'audiobooks', 'search', 'profile', 'settings'];
+
+// Gradient tab icon component with rainbow effect for active state
+function GradientTabIcon({ name, size, color, focused }: { name: any; size: number; color: string; focused: boolean }) {
+  const { colors } = useTheme();
+  
+  // Use Ionicons on mobile
+  if (Platform.OS !== 'web') {
+    return <Ionicons name={name} size={size} color={color} />;
+  }
+  
+  // Web: Use same SVG paths for both active and inactive, just different colors
+  const gradientId = `tab-icon-gradient-${name}`;
+  const iconPaths = getIconPaths(name);
+  
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={colors.accent} />
+          <stop offset="40%" stopColor={colors.secondary} />
+          <stop offset="70%" stopColor="#8B6DB8" />
+          <stop offset="100%" stopColor="#A85A95" />
+        </linearGradient>
+      </defs>
+      <g fill={focused ? `url(#${gradientId})` : color}>
+        {iconPaths.map((d, i) => <path key={i} d={d} />)}
+      </g>
+    </svg>
+  );
+}
+
+// SVG path data for Ionicons (matching actual Ionicons shapes)
+function getIconPaths(name: string): string[] {
+  const paths: Record<string, string[]> = {
+    // Open book icon - wider spread
+    'book': ['M4 6.5C4 5.67 4.67 5 5.5 5L12 8l6.5-3c.83 0 1.5.67 1.5 1.5v11c0 .83-.67 1.5-1.5 1.5L12 19l-6.5-1.5C4.67 17.5 4 16.83 4 16v-9.5zm1.5 0V16l5.5 1.3V8.2L5.5 6.5zm12 0L13 8.2v9.1l5.5-1.3V6.5z'],
+    'headset': ['M12 1a9 9 0 0 0-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7a9 9 0 0 0-9-9z'],
+    'search': ['M21.71 20.29L18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a1 1 0 0 0 1.42 0 1 1 0 0 0 0-1.39zM11 18a7 7 0 1 1 7-7 7 7 0 0 1-7 7z'],
+    'person-circle': ['M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'],
+    // Settings gear - cleaner cog design
+    'settings': ['M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.16 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.04.64.09.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'],
+  };
+  return paths[name] || [];
+}
 
 // Custom translucent tab bar background for web
 function TranslucentTabBarBackground() {
@@ -133,8 +178,8 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'EBooks',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="book" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <GradientTabIcon name="book" size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -142,8 +187,8 @@ export default function TabsLayout() {
         name="audiobooks"
         options={{
           title: 'Audiobooks',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="headset" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <GradientTabIcon name="headset" size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -151,8 +196,8 @@ export default function TabsLayout() {
         name="search"
         options={{
           title: 'Search',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <GradientTabIcon name="search" size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -160,8 +205,8 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-circle" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <GradientTabIcon name="person-circle" size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -169,8 +214,8 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <GradientTabIcon name="settings" size={size} color={color} focused={focused} />
           ),
         }}
       />
