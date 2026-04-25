@@ -2,8 +2,8 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { Platform } from 'react-native';
 import { storage } from '../services/storage';
 import {
-  themes, fontFamilies, defaultCustomTheme,
-  type ThemeName, type FontName, type ColorScheme, type CustomFont,
+  themes, fontFamilies, defaultCustomTheme, resolveTheme,
+  type ThemeName, type ThemeMode, type FontName, type ColorScheme, type CustomFont,
 } from '../constants/theme';
 
 // Profile-scoped storage keys (settings stored per profile)
@@ -15,6 +15,8 @@ const BASE_STORAGE_KEYS = {
   UI_GLOW: 'app_ui_glow',
   UI_ANIMATIONS: 'app_ui_animations',
   ACTIVE_CUSTOM_FONT: 'app_active_custom_font_id',
+  STARFIELD_ENABLED: 'app_starfield_enabled',
+  THEME_MODE: 'app_theme_mode',
 };
 
 // Helper to get profile-scoped storage key
@@ -36,16 +38,20 @@ const STORAGE_KEYS = {
   get UI_GLOW() { return getStorageKey(BASE_STORAGE_KEYS.UI_GLOW); },
   get UI_ANIMATIONS() { return getStorageKey(BASE_STORAGE_KEYS.UI_ANIMATIONS); },
   get ACTIVE_CUSTOM_FONT() { return getStorageKey(BASE_STORAGE_KEYS.ACTIVE_CUSTOM_FONT); },
+  get STARFIELD_ENABLED() { return getStorageKey(BASE_STORAGE_KEYS.STARFIELD_ENABLED); },
+  get THEME_MODE() { return getStorageKey(BASE_STORAGE_KEYS.THEME_MODE); },
 };
 
 interface ThemeContextType {
   themeName: ThemeName;
+  themeMode: ThemeMode;
   fontName: FontName;
   colors: ColorScheme;
   fontFamily: string;
   customFonts: CustomFont[];
   customThemeColors: { bg: string; accent: string };
   setTheme: (t: ThemeName) => void;
+  setThemeMode: (m: ThemeMode) => void;
   setFont: (f: FontName) => void;
   setCustomFont: (id: string) => void;
   addCustomFont: (name: string, dataUrl: string) => Promise<CustomFont>;
@@ -56,16 +62,20 @@ interface ThemeContextType {
   uiGlowEnabled: boolean;
   uiAnimationsEnabled: boolean;
   setUiEffects: (glow: boolean, animations: boolean) => Promise<void>;
+  starfieldEnabled: boolean;
+  setStarfieldEnabled: (enabled: boolean) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
   themeName: 'midnight',
+  themeMode: 'dark',
   fontName: 'georgia',
   colors: themes.midnight,
   fontFamily: fontFamilies.georgia,
   customFonts: [],
   customThemeColors: { bg: '#0d0d12', accent: '#e8a838' },
   setTheme: () => {},
+  setThemeMode: () => {},
   setFont: () => {},
   setCustomFont: () => {},
   addCustomFont: async () => ({ id: '', name: '', dataUrl: '' }),
@@ -75,6 +85,8 @@ const ThemeContext = createContext<ThemeContextType>({
   uiGlowEnabled: true,
   uiAnimationsEnabled: true,
   setUiEffects: async () => {},
+  starfieldEnabled: true,
+  setStarfieldEnabled: async () => {},
 });
 
 function injectFontFace(font: CustomFont) {
@@ -109,6 +121,8 @@ function buildCustomScheme(bg: string, accent: string): ColorScheme {
     accent,
     accentDim: blendHex(accent, '#000000', 0.2),
     accentSoft: hexWithAlpha(accent, 0.15),
+    secondary: '#ffea4a',
+    secondarySoft: 'rgba(255, 234, 74, 0.15)',
     textPrimary: '#f0eaf0',
     textSecondary: blendHex(bg, '#ffffff', 0.55),
     textMuted: blendHex(bg, '#ffffff', 0.32),
@@ -153,27 +167,51 @@ function isLight(hex: string): boolean {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeName, setThemeName] = useState<ThemeName>('midnight');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
   const [fontName, setFontName] = useState<FontName>('georgia');
   const [activeCustomFontId, setActiveCustomFontId] = useState<string | null>(null);
   const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
   const [customThemeColors, setCustomThemeColors] = useState<{ bg: string; accent: string }>({ bg: '#0d0d12', accent: '#e8a838' });
   const [uiGlowEnabled, setUiGlowEnabled] = useState<boolean>(true);
   const [uiAnimationsEnabled, setUiAnimationsEnabled] = useState<boolean>(true);
+  const [starfieldEnabled, setStarfieldEnabledState] = useState<boolean>(true);
+  const [systemColorScheme, setSystemColorScheme] = useState<'light' | 'dark'>('dark');
+
+  // Listen for system color scheme changes
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+      const handler = (e: MediaQueryListEvent) => {
+        setSystemColorScheme(e.matches ? 'light' : 'dark');
+      };
+      
+      // Set initial value
+      setSystemColorScheme(mediaQuery.matches ? 'light' : 'dark');
+      
+      // Listen for changes
+      mediaQuery.addEventListener('change', handler);
+      return () => mediaQuery.removeEventListener('change', handler);
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
       const t = await storage.getItem(STORAGE_KEYS.THEME) as ThemeName | null;
+      const tm = await storage.getItem(STORAGE_KEYS.THEME_MODE) as ThemeMode | null;
       const f = await storage.getItem(STORAGE_KEYS.FONT);
       const cf = await storage.getItem(STORAGE_KEYS.CUSTOM_FONTS);
       const customId = await storage.getItem(STORAGE_KEYS.ACTIVE_CUSTOM_FONT);
       const cc = await storage.getItem(STORAGE_KEYS.CUSTOM_COLORS);
       const glow = await storage.getItem(STORAGE_KEYS.UI_GLOW);
       const animate = await storage.getItem(STORAGE_KEYS.UI_ANIMATIONS);
+      const starfield = await storage.getItem(STORAGE_KEYS.STARFIELD_ENABLED);
 
       if (t && themes[t]) setThemeName(t);
+      if (tm && ['light', 'dark', 'auto'].includes(tm)) setThemeModeState(tm);
 
       if (glow !== null) setUiGlowEnabled(glow === 'true');
       if (animate !== null) setUiAnimationsEnabled(animate === 'true');
+      if (starfield !== null) setStarfieldEnabledState(starfield === 'true');
 
       if (cc) {
         try {
@@ -205,6 +243,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   async function setTheme(t: ThemeName) {
     setThemeName(t);
     await storage.setItem(STORAGE_KEYS.THEME, t);
+  }
+
+  async function setThemeMode(m: ThemeMode) {
+    setThemeModeState(m);
+    await storage.setItem(STORAGE_KEYS.THEME_MODE, m);
   }
 
   async function setFont(f: FontName) {
@@ -258,6 +301,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     await storage.setItem(STORAGE_KEYS.UI_ANIMATIONS, animations ? 'true' : 'false');
   }
 
+  async function setStarfieldEnabled(enabled: boolean) {
+    setStarfieldEnabledState(enabled);
+    await storage.setItem(STORAGE_KEYS.STARFIELD_ENABLED, enabled ? 'true' : 'false');
+  }
+
   // Resolve the CSS font-family string for the active selection
   const activeCustomFont = activeCustomFontId
     ? customFonts.find(f => f.id === activeCustomFontId)
@@ -269,17 +317,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const colors: ColorScheme = themeName === 'custom'
     ? buildCustomScheme(customThemeColors.bg, customThemeColors.accent)
-    : themes[themeName];
+    : resolveTheme(themeName, themeMode, systemColorScheme);
 
   return (
     <ThemeContext.Provider value={{
       themeName,
+      themeMode,
       fontName,
       colors,
       fontFamily,
       customFonts,
       customThemeColors,
       setTheme,
+      setThemeMode,
       setFont,
       setCustomFont,
       addCustomFont,
@@ -289,6 +339,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       uiGlowEnabled,
       uiAnimationsEnabled,
       setUiEffects,
+      starfieldEnabled,
+      setStarfieldEnabled,
     }}>
       {children}
     </ThemeContext.Provider>

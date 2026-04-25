@@ -1,43 +1,16 @@
 import axios, { AxiosInstance } from 'axios';
 import { Platform } from 'react-native';
 import { storage } from './storage';
+import { PROXY_PATH, isProxied, extractTargetUrl } from '@/config/proxy';
+import { credentials, STORAGE_KEYS } from '@/config/credentials';
 
 /**
  * Dynamic Universal Tunnel Logic
  * Instead of hardcoding proxy URLs, we now stick to the user's original server URL
  * for everything, and only tunnel through the local origin when Bypass CORS is enabled.
+ * 
+ * Credentials are managed centrally via @/config/credentials
  */
-
-// Global storage keys (shared across all profiles)
-const GLOBAL_STORAGE_KEYS = {
-  SERVER_URL: 'folio_kavita_server_url',
-  API_KEY: 'folio_kavita_api_key',
-};
-
-// Profile-scoped storage keys
-const BASE_STORAGE_KEYS = {
-  JWT_TOKEN: 'kavita_jwt_token',
-};
-
-// Helper to get profile-scoped storage key (only for JWT tokens)
-function getStorageKey(key: string): string {
-  // Check if we have an active profile in memory
-  const activeProfileId = typeof window !== 'undefined'
-    ? (window as any).__ACTIVE_PROFILE_ID
-    : null;
-
-  if (activeProfileId) {
-    return `folio_${activeProfileId}_${key}`;
-  }
-  return key;
-}
-
-// Storage keys - Server URL and API key are global, JWT is profile-specific
-const STORAGE_KEYS = {
-  SERVER_URL: GLOBAL_STORAGE_KEYS.SERVER_URL,
-  API_KEY: GLOBAL_STORAGE_KEYS.API_KEY,
-  get JWT_TOKEN() { return getStorageKey(BASE_STORAGE_KEYS.JWT_TOKEN); },
-};
 
 export interface KavitaBookInfo {
   pages: number;
@@ -204,6 +177,7 @@ class KavitaAPI {
   private serverUrl: string = '';
   private apiKey: string = '';
   private jwtToken: string = '';
+  private progressTrackingEnabled: boolean = true;
   private proxyOrigin: string | null = null;
 
   constructor() {
@@ -217,13 +191,21 @@ class KavitaAPI {
 
     this.client.interceptors.request.use((config) => {
       // ── Proxy Mode ──────────────────────────────────────────────────────────
-      // Build the full target URL (including auth) and wrap it in /proxy?url=
-      const isProxied = this.proxyOrigin && config.url?.startsWith('/api/');
-      if (isProxied) {
+      // Build the full target URL (including auth) and wrap it in /dynamic-proxy?url=
+      // When baseURL is set, Axios prepends it BEFORE the interceptor runs,
+      // making config.url an absolute URL. Check for /api/ in both cases.
+      const url = config.url || '';
+      const isApiPath = url.startsWith('/api/') || url.includes('/api/');
+      const shouldProxy = this.proxyOrigin && isApiPath && !isProxied(url);
+      if (shouldProxy) {
         // Ensure we use the RAW server URL as the base for the proxy target.
         let rawTargetBase = this.serverUrl;
-        if (rawTargetBase.includes('/proxy?url=')) {
-          const parts = rawTargetBase.split('/proxy?url=');
+        const extractedTarget = extractTargetUrl(rawTargetBase);
+        if (extractedTarget) {
+          rawTargetBase = extractedTarget;
+        } else if (rawTargetBase.includes(PROXY_PATH)) {
+          // Fallback for edge cases
+          const parts = rawTargetBase.split(PROXY_PATH);
           rawTargetBase = decodeURIComponent(parts[parts.length - 1]);
         }
         rawTargetBase = rawTargetBase.replace(/\/$/, '');
@@ -250,7 +232,7 @@ class KavitaAPI {
           console.log(`[Kavita Proxy] ${config.method?.toUpperCase()} ${fullTarget}`);
         }
 
-        config.url = `${this.proxyOrigin}${encodeURIComponent(fullTarget)}`;
+        config.url = this.proxyOrigin + encodeURIComponent(fullTarget);
         config.baseURL = '';
         config.params = undefined;
         if (this.jwtToken) {
@@ -263,9 +245,13 @@ class KavitaAPI {
       if (__DEV__) {
         console.log(`Kavita Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
       }
-      
+
       if (this.jwtToken) {
         config.headers.Authorization = `Bearer ${this.jwtToken}`;
+      } else if (this.apiKey && config.url) {
+        // Add API key as query parameter when JWT is not available
+        const separator = config.url.includes('?') ? '&' : '?';
+        config.url = `${config.url}${separator}apiKey=${encodeURIComponent(this.apiKey)}`;
       }
       return config;
     });
@@ -275,40 +261,43 @@ class KavitaAPI {
     this.proxyOrigin = origin;
   }
 
+  getProxyOrigin(): string | null {
+    return this.proxyOrigin;
+  }
+
   async initialize() {
-    console.log('[KavitaAPI] Initializing...');
     try {
-      const storedUrl = await storage.getItem(STORAGE_KEYS.SERVER_URL);
-      const storedKey = await storage.getItem(STORAGE_KEYS.API_KEY);
-      console.log('[KavitaAPI] Stored credentials found:', !!storedUrl, !!storedKey);
+      const storedUrl = await credentials.kavita.getServerUrl();
+      const storedKey = await credentials.kavita.getApiKey();
+      this.progressTrackingEnabled = await credentials.kavita.isProgressTrackingEnabled();
 
       if (storedUrl && storedKey) {
         this.setServer(storedUrl, storedKey);
-        console.log('[KavitaAPI] Set server to:', this.serverUrl);
-        const success = await this.login();
-        if (success) {
-          console.log(`✅ Kavita Authenticated (JWT): ${this.serverUrl}`);
-        } else if (this.apiKey) {
-          console.log(`✅ Kavita Connected (apiKey auth, no JWT): ${this.serverUrl}`);
-        } else {
-          console.warn('⚠️ Kavita credentials found but authentication failed.');
+        
+        // Try to load JWT token (profile-specific)
+        const storedJwt = await credentials.kavita.getJwtToken();
+        if (storedJwt) {
+          this.jwtToken = storedJwt;
+          this.client.defaults.headers.common['Authorization'] = `Bearer ${this.jwtToken}`;
         }
-      } else {
-        console.log('[KavitaAPI] No stored credentials');
       }
     } catch (e) {
       console.error('Failed to initialize KavitaAPI', e);
     }
   }
 
+  async setProgressTrackingEnabled(enabled: boolean): Promise<void> {
+    this.progressTrackingEnabled = enabled;
+    await credentials.kavita.setProgressTracking(enabled);
+  }
+
   private setServer(url: string, key: string) {
     let clean = url.trim().replace(/\/$/, '');
     
     // If the URL is already a proxy URL, extract the inner target
-    if (clean.includes('/proxy?url=')) {
-      const parts = clean.split('/proxy?url=');
-      clean = decodeURIComponent(parts[parts.length - 1]).replace(/\/$/, '');
-      console.log('[Kavita] Extracted raw server from proxy URL:', clean);
+    const extractedTarget = extractTargetUrl(clean);
+    if (extractedTarget) {
+      clean = extractedTarget.replace(/\/$/, '');
     }
 
     if (!/^https?:\/\//i.test(clean)) clean = 'http://' + clean;
@@ -320,39 +309,28 @@ class KavitaAPI {
 
   async saveCredentials(serverUrl: string, apiKey: string) {
     this.setServer(serverUrl, apiKey);
-    await storage.setItem(STORAGE_KEYS.SERVER_URL, this.serverUrl);
-    await storage.setItem(STORAGE_KEYS.API_KEY, apiKey);
-    this.apiKey = apiKey;
-
-    let cleanUrl = serverUrl.trim().replace(/\/$/, '');
-    if (!/^https?:\/\//i.test(cleanUrl)) cleanUrl = 'http://' + cleanUrl;
-    this.serverUrl = cleanUrl;
-    this.client.defaults.baseURL = cleanUrl;
-    await storage.setItem(STORAGE_KEYS.SERVER_URL, cleanUrl);
+    await credentials.kavita.setServerUrl(this.serverUrl);
+    await credentials.kavita.setApiKey(apiKey);
   }
 
   async loadCredentials() {
-    const storedUrl = await storage.getItem(STORAGE_KEYS.SERVER_URL);
-    const storedKey = await storage.getItem(STORAGE_KEYS.API_KEY);
+    const storedUrl = await credentials.kavita.getServerUrl();
+    const storedKey = await credentials.kavita.getApiKey();
 
     if (storedUrl && storedKey) {
       this.setServer(storedUrl, storedKey);
-      return true;
     }
-    return false;
   }
 
   async clearCredentials() {
     this.serverUrl = '';
     this.apiKey = '';
     this.client.defaults.baseURL = '';
-    await storage.deleteItem(STORAGE_KEYS.SERVER_URL);
-    await storage.deleteItem(STORAGE_KEYS.API_KEY);
+    await credentials.kavita.clearAll();
   }
 
   async login(): Promise<boolean> {
     try {
-      console.log('[KavitaAPI] Login attempt to:', this.serverUrl);
       // Use the apiKey to get a JWT (GET request, not POST)
       const response = await this.client.get('/api/Plugin/authenticate', {
         params: { 
@@ -360,27 +338,39 @@ class KavitaAPI {
           pluginName: 'Folio'
         },
       });
-
-      console.log('[KavitaAPI] Auth response status:', response.status, 'has token:', !!response.data?.token);
       if (response.data?.token) {
         this.jwtToken = response.data.token;
         
         // CRITICAL: Set the default header so future requests aren't 401
         this.client.defaults.headers.common['Authorization'] = `Bearer ${this.jwtToken}`;
         
-        await storage.setItem(STORAGE_KEYS.JWT_TOKEN, this.jwtToken);
+        await credentials.kavita.setJwtToken(this.jwtToken);
         return true;
       }
-      console.log('[KavitaAPI] No token in response:', response.data);
       return false;
     } catch (error: any) {
       const status = error?.response?.status;
       console.error('[KavitaAPI] Login error:', status, error?.response?.data || error?.message);
       
       // 404 means this Kavita version doesn't have the Plugin API
-      // Return false so we can fall back to apiKey query param auth
+      // Validate the API key works by making a test request
       if (status === 404) {
-        console.log('[KavitaAPI] Plugin API not available (404), falling back to apiKey auth');
+        try {
+          // Test the API key by calling /api/Library with apiKey param
+          // Note: The interceptor will add apiKey automatically, but we add it explicitly here too
+          const testResponse = await this.client.get('/api/Library', {
+            params: { apiKey: this.apiKey },
+            timeout: 10000 // 10 second timeout for validation
+          });
+          // Accept any 2xx status (200 OK, 204 No Content, etc.)
+          if (testResponse.status >= 200 && testResponse.status < 300) {
+            // Mark as authenticated with API key (no JWT)
+            return true;
+          }
+        } catch (testError: any) {
+          console.error('[KavitaAPI] API key validation failed:', testError?.response?.status, testError?.message);
+          return false;
+        }
         return false;
       }
       
@@ -393,9 +383,8 @@ class KavitaAPI {
     this.jwtToken = '';
     this.apiKey = '';
     this.serverUrl = '';
-    await storage.deleteItem(STORAGE_KEYS.JWT_TOKEN);
-    await storage.deleteItem(STORAGE_KEYS.API_KEY);
-    await storage.deleteItem(STORAGE_KEYS.SERVER_URL);
+    await credentials.kavita.clearJwtToken();
+    await credentials.kavita.clearAll();
   }
 
   isAuthenticated(): boolean { return !!this.jwtToken; }
@@ -405,6 +394,10 @@ class KavitaAPI {
     return !!this.serverUrl && !!this.apiKey;
   }
 
+  isProgressTrackingEnabled(): boolean {
+    return this.progressTrackingEnabled;
+  }
+
   getServerUrl(): string { return this.serverUrl; }
   getToken(): string { return this.jwtToken; }
   getApiKey(): string { return this.apiKey; }
@@ -412,7 +405,57 @@ class KavitaAPI {
   // ── Libraries ───────────────────────────────────────────────────────────────
 
   async getLibraries(): Promise<Library[]> {
-    const response = await this.client.get('/api/Library');
+    // Try /api/Library first (standard endpoint)
+    let response = await this.client.get('/api/Library', {
+      params: this.apiKey ? { apiKey: this.apiKey } : undefined
+    });
+    
+    // If 204/empty, try /api/Library/all
+    if (!Array.isArray(response.data) || response.data.length === 0) {
+      try {
+        const allResponse = await this.client.get('/api/Library/all', {
+          params: this.apiKey ? { apiKey: this.apiKey } : undefined
+        });
+        if (Array.isArray(allResponse.data) && allResponse.data.length > 0) {
+          response = allResponse;
+        }
+      } catch {
+        // /api/Library/all failed
+      }
+    }
+    
+    // Final fallback: extract unique libraries from /api/Series/all (which we know works)
+    if (!Array.isArray(response.data) || response.data.length === 0) {
+      try {
+        // Note: /api/Series/all requires POST, not GET
+        const seriesResponse = await this.client.post('/api/Series/all', {
+          apiKey: this.apiKey
+        });
+        if (Array.isArray(seriesResponse.data)) {
+          // Extract unique libraries from series data
+          const libraryMap = new Map<number, Library>();
+          seriesResponse.data.forEach((series: any) => {
+            if (series.libraryId && !libraryMap.has(series.libraryId)) {
+              libraryMap.set(series.libraryId, {
+                id: series.libraryId,
+                name: series.libraryName || `Library ${series.libraryId}`,
+                type: typeof series.libraryType === 'number' ? series.libraryType : 0,
+                series: 0 // Will be populated when we have actual library data
+              });
+            }
+          });
+          const extractedLibraries = Array.from(libraryMap.values());
+          return extractedLibraries;
+        }
+      } catch {
+        // Series fallback failed
+      }
+    }
+    
+    // Handle 204 No Content or non-array responses
+    if (!Array.isArray(response.data)) {
+      return [];
+    }
     return response.data;
   }
 
@@ -474,16 +517,19 @@ class KavitaAPI {
     try {
       const response = await this.client.get(`/api/Book/${chapterId}/chapters`);
       return Array.isArray(response.data) ? response.data : [];
-    } catch (error: any) {
+    } catch {
       // Some Kavita versions return 500 on this endpoint
       // Return empty TOC so the reader can still load
-      console.warn(`[KavitaAPI] Failed to get TOC for chapter ${chapterId}:`, error?.response?.status);
       return [];
     }
   }
 
   async getChapterInfo(chapterId: number): Promise<ChapterInfo> {
     const response = await this.client.get(`/api/Reader/chapter-info?chapterId=${chapterId}`);
+    if (__DEV__) {
+      console.log(`[KavitaAPI] getChapterInfo() response status: ${response.status}`);
+      console.log(`[KavitaAPI] getChapterInfo() response data:`, response.data);
+    }
     // Kavita's chapter-info response does not include the chapterId itself — inject it.
     return {
       ...response.data,
@@ -603,6 +649,24 @@ class KavitaAPI {
     return response.data;
   }
 
+  async addGenreToSeries(seriesId: number, genre: { id: number; title: string }): Promise<void> {
+    const meta = await this.getSeriesMetadata(seriesId);
+    if (!meta) return;
+    // Check if genre already exists
+    if (meta.genres.some(g => g.id === genre.id || g.title.toLowerCase() === genre.title.toLowerCase())) return;
+    const updated = { ...meta, genres: [...meta.genres, genre] };
+    await this.updateSeriesMetadata(updated);
+  }
+
+  async addTagToSeries(seriesId: number, tag: { id: number; title: string }): Promise<void> {
+    const meta = await this.getSeriesMetadata(seriesId);
+    if (!meta) return;
+    // Check if tag already exists
+    if (meta.tags.some(t => t.id === tag.id || t.title.toLowerCase() === tag.title.toLowerCase())) return;
+    const updated = { ...meta, tags: [...meta.tags, tag] };
+    await this.updateSeriesMetadata(updated);
+  }
+
   // ── Reading progress ─────────────────────────────────────────────────────────
 
   async getReadingProgress(chapterId: number): Promise<number> {
@@ -648,10 +712,8 @@ class KavitaAPI {
   // ── Cover upload ─────────────────────────────────────────────────────────────
 
   async uploadSeriesCover(seriesId: number, base64DataUrl: string): Promise<void> {
-    // Strip data URL prefix — Kavita expects raw base64
-    const url = base64DataUrl.startsWith('data:')
-      ? base64DataUrl.replace(/^data:[^;]+;base64,/, '')
-      : base64DataUrl;
+    // Send full data URL — Kavita's /api/Upload/series endpoint accepts data URLs
+    const url = base64DataUrl;
     try {
       await this.client.post('/api/Upload/series', { id: seriesId, url });
     } catch (e: any) {

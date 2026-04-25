@@ -11,7 +11,10 @@
     "preview": "npx serve dist --single",
     "preview:proxy": "node scripts/preview-server.js",
     "test": "jest",
-    "test:profile": "jest __tests__/profile.test.ts"
+    "test:profile": "jest __tests__/profile.test.ts",
+    "validate:types": "tsc --noEmit --jsx react-native",
+    "validate:jsx": "node scripts/validate-jsx.js",
+    "structure:generate": "grep -rn \"^export function\\|^export const.*=.*(\" app/ components/ hooks/ services/ contexts/ constants/ --include=\"*.tsx\" --include=\"*.ts\" | sort > STRUCTURE_AUTO.md"
   },
   "dependencies": {
     "@expo/config-plugins": "~55.0.5",
@@ -26,6 +29,7 @@
     "expo-constants": "~55.0.9",
     "expo-file-system": "~55.0.12",
     "expo-font": "~55.0.4",
+    "expo-image-picker": "~16.1.4",
     "expo-linking": "~55.0.9",
     "expo-router": "~55.0.8",
     "expo-secure-store": "~55.0.9",
@@ -39,6 +43,7 @@
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
     "react-native-web": "^0.21.2",
+    "react-native-web-webview": "^1.0.2",
     "react-native-webview": "^13.16.0",
     "react-native-worklets": "^0.8.1"
   },

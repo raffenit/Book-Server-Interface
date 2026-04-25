@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,22 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
+  Platform,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { WebView } from 'react-native-web-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { kavitaAPI, ChapterInfo } from '../../services/kavitaAPI';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Typography, Spacing, Radius, ColorScheme } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { storage } from '../../services/storage';
+
+// Storage keys for reader preferences
+const STORAGE_KEY_READING_DIRECTION = 'folio_comic_reading_direction';
+const STORAGE_KEY_FIT_MODE = 'folio_comic_fit_mode';
+
+type ReadingDirection = 'ltr' | 'rtl';
+type FitMode = 'contain' | 'width' | 'height';
 
 export default function ImageReaderScreen() {
   const { colors } = useTheme();
@@ -24,14 +33,27 @@ export default function ImageReaderScreen() {
     title: string;
     seriesId: string;
     volumeId: string;
-    libraryId: string; // Add this
+    libraryId: string;
   }>();
 
   const [showHeader, setShowHeader] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [readingDirection, setReadingDirection] = useState<ReadingDirection>('ltr');
+  const [fitMode, setFitMode] = useState<FitMode>('contain');
   const webViewRef = useRef<WebView>(null);
+
+  // Load saved preferences
+  useEffect(() => {
+    storage.getItem(STORAGE_KEY_READING_DIRECTION).then((val) => {
+      if (val === 'rtl' || val === 'ltr') setReadingDirection(val);
+    });
+    storage.getItem(STORAGE_KEY_FIT_MODE).then((val) => {
+      if (val === 'contain' || val === 'width' || val === 'height') setFitMode(val);
+    });
+  }, []);
 
   // Convert to numbers for the API calls
   const chapterId = Number(params.chapterId);
@@ -41,21 +63,68 @@ export default function ImageReaderScreen() {
   
   const [chapterInfo, setChapterInfo] = useState<ChapterInfo | null>(null);
 
-  // Fetch info once to populate the "suitcase"
+  // Fetch info once to populate the "suitcase" - wait for proxy to be ready
+  const proxyOrigin = kavitaAPI.getProxyOrigin();
   useEffect(() => {
+    if (!proxyOrigin) {
+      console.log('[ImageReader] Waiting for proxy to be ready...');
+      return;
+    }
+    console.log('[ImageReader] Proxy ready, fetching chapter info:', chapterId);
     (async () => {
-      const info = await kavitaAPI.getChapterInfo(chapterId);
-      setChapterInfo(info);
-      if (info) setTotalPages(info.pages);
+      try {
+        const info = await kavitaAPI.getChapterInfo(chapterId);
+        console.log('[ImageReader] Chapter info received:', info);
+        setChapterInfo(info);
+        if (info) setTotalPages(info.pages);
+      } catch (err: any) {
+        console.error('[ImageReader] Failed to fetch chapter info:', err?.message || err);
+        console.error('[ImageReader] Error details:', err?.response?.status, err?.response?.data);
+      }
     })();
-  }, [chapterId]);
+  }, [chapterId, proxyOrigin]);
 
   const token = kavitaAPI.getToken();
   // In proxy mode serverUrl is '' so these become relative URLs, proxied to Kavita
   const serverUrl = kavitaAPI.getServerUrl();
+  
+  // Helper to build API URL - uses proxy when available
+  const buildApiUrl = (path: string, params?: string) => {
+    const targetUrl = `${serverUrl}${path}${params ? '?' + params : ''}`;
+    console.log('[buildApiUrl] serverUrl:', serverUrl, 'proxyOrigin:', proxyOrigin, 'path:', path);
+    if (proxyOrigin) {
+      const proxiedUrl = `${proxyOrigin}${encodeURIComponent(targetUrl)}`;
+      console.log('[buildApiUrl] Using proxy:', proxiedUrl);
+      return proxiedUrl;
+    }
+    console.log('[buildApiUrl] Using direct URL:', targetUrl);
+    return targetUrl;
+  };
 
-  const imageHtml = `
-<!DOCTYPE html>
+  // Memoize URL building to prevent rebuilding on every render
+  const { chapterInfoUrl, imageBaseUrl, apiKey } = useMemo(() => {
+    if (!proxyOrigin || !serverUrl) {
+      return { chapterInfoUrl: '', imageBaseUrl: '', apiKey: '' };
+    }
+    // Include apiKey in both URLs for authentication
+    const infoUrl = buildApiUrl('/api/Reader/chapter-info', `chapterId=${chapterId}&apiKey=${kavitaAPI.getApiKey()}`);
+    const imgUrl = buildApiUrl('/api/Reader/image', `bookId=${chapterId}&apiKey=${kavitaAPI.getApiKey()}`);
+    const key = kavitaAPI.getApiKey();
+    console.log('[ImageReader] URLs built - chapterInfoUrl:', infoUrl);
+    console.log('[ImageReader] imageBaseUrl (with apiKey):', imgUrl);
+    return { chapterInfoUrl: infoUrl, imageBaseUrl: imgUrl, apiKey: key };
+  }, [proxyOrigin, serverUrl, chapterId]);
+  
+  // Track render count to diagnose re-render loops
+  const renderCountRef = useRef(0);
+  renderCountRef.current++;
+  if (__DEV__ && renderCountRef.current % 10 === 0) {
+    console.log(`[ImageReader] Render count: ${renderCountRef.current}`);
+  }
+
+  // Build the HTML template with current settings - memoize to prevent rebuilds
+  const imageHtml = useMemo(() => {
+    return `<!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes">
@@ -77,10 +146,35 @@ export default function ImageReaderScreen() {
       overflow: hidden;
     }
     #page-img {
+      display: none;
+      ${fitMode === 'contain' ? `
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
-      display: none;
+      ` : fitMode === 'width' ? `
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+      ` : `
+      width: auto;
+      height: 100%;
+      object-fit: contain;
+      `}
+    }
+    #page-img.fit-contain {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    #page-img.fit-width {
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+    #page-img.fit-height {
+      width: auto;
+      height: 100%;
+      object-fit: contain;
     }
     #spinner {
       color: ${colors.accent};
@@ -102,29 +196,78 @@ export default function ImageReaderScreen() {
   <div id="viewer">
     <span id="spinner">Loading…</span>
     <div id="error-msg"></div>
+    <div id="debug-log" style="position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 12px; padding: 10px; max-height: 200px; overflow-y: auto; z-index: 9999;"></div>
     <img id="page-img" />
   </div>
   <script>
-    // These are now hardcoded into the string that the WebView loads
-    const TOKEN = '${token}';
-    const SERVER = '${serverUrl}';
-    const CHAPTER_ID = ${chapterId};
-    const API_KEY = '${kavitaAPI.getApiKey()}'; 
+    // Global error handler
+    window.onerror = function(msg, url, line, col, error) {
+      const el = document.getElementById('debug-log');
+      if (el) el.innerHTML += 'ERROR: ' + msg + ' at line ' + line + '<br>';
+      console.error('[WebView Error]', msg, 'line:', line);
+      return false;
+    };
+    
+    // Debug helper - visible on screen
+    function debug(msg) {
+      console.log('[WebView]', msg);
+      const el = document.getElementById('debug-log');
+      if (el) el.innerHTML += msg + '<br>';
+    }
+    
+    try {
+      debug('SCRIPT STARTING...');
+      // These are now hardcoded into the string that the WebView loads
+      const TOKEN = '${token}';
+      const CHAPTER_ID = ${chapterId};
+      const API_KEY = '${kavitaAPI.getApiKey()}';
+      const CHAPTER_INFO_URL = '${chapterInfoUrl}';
+      const IMAGE_BASE_URL = '${imageBaseUrl}';
+      const PRELOADED_CHAPTER_INFO_B64 = '${btoa(JSON.stringify(chapterInfo))}';
+      let PRELOADED_CHAPTER_INFO = null;
+      try {
+        // atob is available in browser WebView environment
+        PRELOADED_CHAPTER_INFO = JSON.parse(atob(PRELOADED_CHAPTER_INFO_B64));
+      } catch(e) {
+        debug('Failed to parse chapter info: ' + e.message);
+      }
+      
+      debug('PRELOADED_CHAPTER_INFO loaded: ' + (PRELOADED_CHAPTER_INFO ? 'yes' : 'no'));
+      if (PRELOADED_CHAPTER_INFO) {
+        debug('Pages: ' + (PRELOADED_CHAPTER_INFO.pages || PRELOADED_CHAPTER_INFO.pagesCount || 'unknown'));
+      }
 
     async function fetchPage(n) {
-      if (cache[n]) return cache[n];
+      debug('fetchPage(' + n + ') starting');
+      if (cache[n]) {
+        debug('fetchPage(' + n + ') - returning from cache');
+        return cache[n];
+      }
       
-      // Now these constants will be recognized because they were 
-      // 'baked in' to the string by the backticks above.
-      const url = SERVER + '/api/Reader/image?bookId=' + CHAPTER_ID + '&pageNum=' + n + '&apiKey=' + API_KEY;
+      // Use proxied URL if available, otherwise construct directly
+      const url = IMAGE_BASE_URL + '&pageNum=' + n;
+      debug('fetchPage(' + n + ') - URL: ' + url.substring(0, 100) + '...');
       
-      const resp = await fetch(url, { 
-        headers: { 'Authorization': 'Bearer ' + TOKEN } 
-      });
-      
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const blob = await resp.blob();
-      return URL.createObjectURL(blob);
+      try {
+        const resp = await fetch(url, { 
+          headers: { 'Authorization': 'Bearer ' + TOKEN } 
+        });
+        debug('fetchPage(' + n + ') - response status: ' + resp.status);
+        
+        if (!resp.ok) {
+          const text = await resp.text();
+          debug('fetchPage(' + n + ') - error response: ' + text.substring(0, 200));
+          throw new Error('HTTP ' + resp.status);
+        }
+        const blob = await resp.blob();
+        debug('fetchPage(' + n + ') - blob size: ' + blob.size);
+        const objUrl = URL.createObjectURL(blob);
+        cache[n] = objUrl;
+        return objUrl;
+      } catch(e) {
+        debug('fetchPage(' + n + ') - ERROR: ' + e.message);
+        throw e;
+      }
     }
     
     let currentPage = 0;
@@ -136,11 +279,17 @@ export default function ImageReaderScreen() {
     }
 
     async function showPage(n) {
-      if (n < 0 || n >= totalPages) return;
+      debug('showPage(' + n + ') starting - totalPages: ' + totalPages);
+      if (n < 0 || n >= totalPages) {
+        debug('showPage(' + n + ') - out of bounds, returning');
+        return;
+      }
       document.getElementById('spinner').style.display = 'block';
       document.getElementById('page-img').style.display = 'none';
       try {
+        debug('showPage(' + n + ') - calling fetchPage...');
         const src = await fetchPage(n);
+        debug('showPage(' + n + ') - got image URL, setting src...');
         const img = document.getElementById('page-img');
         img.src = src;
         img.style.display = 'block';
@@ -151,6 +300,7 @@ export default function ImageReaderScreen() {
         if (n + 1 < totalPages) fetchPage(n + 1).catch(() => {});
         if (n - 1 >= 0) fetchPage(n - 1).catch(() => {});
       } catch(e) {
+        debug('showPage(' + n + ') - ERROR: ' + e.message);
         document.getElementById('spinner').style.display = 'none';
         const errEl = document.getElementById('error-msg');
         errEl.textContent = 'Failed to load page: ' + e.message;
@@ -161,18 +311,34 @@ export default function ImageReaderScreen() {
 
     async function init() {
       try {
-        const infoUrl = SERVER + '/api/Reader/chapter-info?chapterId=' + CHAPTER_ID;
-        const resp = await fetch(infoUrl, { headers: { 'Authorization': 'Bearer ' + TOKEN } });
-        const info = await resp.json();
+        debug('init() starting');
+        let info;
+        debug('Checking PRELOADED_CHAPTER_INFO...');
+        if (PRELOADED_CHAPTER_INFO && (PRELOADED_CHAPTER_INFO.pages || PRELOADED_CHAPTER_INFO.pagesCount)) {
+          debug('Using preloaded chapter info');
+          info = PRELOADED_CHAPTER_INFO;
+        } else {
+          debug('Fetching chapter info from URL...');
+          const resp = await fetch(CHAPTER_INFO_URL, { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+          debug('Fetch response status: ' + resp.status);
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          info = await resp.json();
+        }
         totalPages = info.pages || info.pagesCount || 0;
+        console.log('[WebView] Total pages:', totalPages);
         notify({ type: 'total', total: totalPages });
         await showPage(0);
         notify({ type: 'loaded' });
       } catch(e) {
+        console.error('[WebView] init() failed:', e.message);
         document.getElementById('spinner').textContent = 'Error: ' + e.message;
         notify({ type: 'error', message: e.message });
       }
     }
+
+    // Reading direction: 'ltr' (Western comics) or 'rtl' (Manga)
+    const READING_DIRECTION = '${readingDirection}';
+    const isRTL = READING_DIRECTION === 'rtl';
 
     // Touch swipe navigation
     let touchStartX = 0, touchStartY = 0;
@@ -184,9 +350,16 @@ export default function ImageReaderScreen() {
       const dx = e.changedTouches[0].clientX - touchStartX;
       const dy = e.changedTouches[0].clientY - touchStartY;
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-        // horizontal swipe — manga reads right-to-left by default
-        if (dx < 0) showPage(currentPage + 1);
-        else showPage(currentPage - 1);
+        // horizontal swipe — respect reading direction
+        // RTL (manga): swipe left = next page, swipe right = prev page
+        // LTR (western): swipe left = prev page, swipe right = next page
+        if (isRTL) {
+          if (dx < 0) showPage(currentPage + 1);
+          else showPage(currentPage - 1);
+        } else {
+          if (dx < 0) showPage(currentPage - 1);
+          else showPage(currentPage + 1);
+        }
       } else if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
         // tap — toggle header
         notify({ type: 'tap' });
@@ -195,22 +368,40 @@ export default function ImageReaderScreen() {
 
     // Click left/right zone navigation
     document.getElementById('viewer').addEventListener('click', e => {
-      // Don't handle clicks that originated from a swipe
       const x = e.clientX / window.innerWidth;
-      if (x < 0.25) showPage(currentPage - 1);
-      else if (x > 0.75) showPage(currentPage + 1);
-      else notify({ type: 'tap' });
+      if (isRTL) {
+        // RTL: left edge = next, right edge = prev
+        if (x < 0.25) showPage(currentPage + 1);
+        else if (x > 0.75) showPage(currentPage - 1);
+        else notify({ type: 'tap' });
+      } else {
+        // LTR: left edge = prev, right edge = next
+        if (x < 0.25) showPage(currentPage - 1);
+        else if (x > 0.75) showPage(currentPage + 1);
+        else notify({ type: 'tap' });
+      }
     });
 
     // Exposed to React Native
-    window.goNext = () => showPage(currentPage + 1);
-    window.goPrev = () => showPage(currentPage - 1);
+    window.goNext = () => showPage(currentPage + (isRTL ? 1 : -1));
+    window.goPrev = () => showPage(currentPage + (isRTL ? -1 : 1));
     window.goToPage = (n) => showPage(n);
+    window.setFitMode = (mode) => {
+      const img = document.getElementById('page-img');
+      img.className = 'fit-' + mode;
+    };
 
     init();
+    } catch(e) {
+      debug('Outer error: ' + e.message);
+      console.error('[WebView] Outer error:', e.message);
+    }
   </script>
 </body>
 </html>`;
+  // Dependencies: only rebuild HTML when these specific values change
+  // Using only primitives to avoid reference equality issues causing re-renders
+  }, [chapterId, chapterInfo?.pages, readingDirection, fitMode, colors.background]);
 
   function sendCmd(cmd: string) {
     webViewRef.current?.injectJavaScript(`${cmd}(); true;`);
@@ -255,11 +446,84 @@ export default function ImageReaderScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>
             {params.title || 'Reader'}
           </Text>
-          {totalPages > 0 && (
-            <Text style={styles.pageCount}>
-              {currentPage + 1} / {totalPages}
-            </Text>
-          )}
+          <TouchableOpacity style={styles.headerBtn} onPress={() => setShowSettings(v => !v)}>
+            <Ionicons name="settings-outline" size={22} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <View style={styles.settingsPanel}>
+          <View style={styles.settingsContent}>
+            <Text style={styles.settingsTitle}>Reading Settings</Text>
+
+            {/* Reading Direction */}
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Reading Direction</Text>
+              <View style={styles.settingButtons}>
+                <TouchableOpacity
+                  style={[styles.settingBtn, readingDirection === 'ltr' && styles.settingBtnActive]}
+                  onPress={() => {
+                    setReadingDirection('ltr');
+                    storage.setItem(STORAGE_KEY_READING_DIRECTION, 'ltr');
+                  }}
+                >
+                  <Text style={[styles.settingBtnText, readingDirection === 'ltr' && styles.settingBtnTextActive]}>LTR</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.settingBtn, readingDirection === 'rtl' && styles.settingBtnActive]}
+                  onPress={() => {
+                    setReadingDirection('rtl');
+                    storage.setItem(STORAGE_KEY_READING_DIRECTION, 'rtl');
+                  }}
+                >
+                  <Text style={[styles.settingBtnText, readingDirection === 'rtl' && styles.settingBtnTextActive]}>RTL</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Fit Mode */}
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Fit Mode</Text>
+              <View style={styles.settingButtons}>
+                <TouchableOpacity
+                  style={[styles.settingBtn, fitMode === 'contain' && styles.settingBtnActive]}
+                  onPress={() => {
+                    setFitMode('contain');
+                    storage.setItem(STORAGE_KEY_FIT_MODE, 'contain');
+                    sendCmd("window.setFitMode('contain')");
+                  }}
+                >
+                  <Text style={[styles.settingBtnText, fitMode === 'contain' && styles.settingBtnTextActive]}>Fit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.settingBtn, fitMode === 'width' && styles.settingBtnActive]}
+                  onPress={() => {
+                    setFitMode('width');
+                    storage.setItem(STORAGE_KEY_FIT_MODE, 'width');
+                    sendCmd("window.setFitMode('width')");
+                  }}
+                >
+                  <Text style={[styles.settingBtnText, fitMode === 'width' && styles.settingBtnTextActive]}>Width</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.settingBtn, fitMode === 'height' && styles.settingBtnActive]}
+                  onPress={() => {
+                    setFitMode('height');
+                    storage.setItem(STORAGE_KEY_FIT_MODE, 'height');
+                    sendCmd("window.setFitMode('height')");
+                  }}
+                >
+                  <Text style={[styles.settingBtnText, fitMode === 'height' && styles.settingBtnTextActive]}>Height</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.closeSettingsBtn} onPress={() => setShowSettings(false)}>
+              <Text style={styles.closeSettingsText}>Close</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -270,8 +534,18 @@ export default function ImageReaderScreen() {
         </View>
       )}
 
+      {(() => {
+        // Log WebView render attempt
+        console.log('[ImageReader] Rendering WebView - HTML length:', imageHtml?.length || 0);
+        console.log('[ImageReader] WebView HTML starts with:', imageHtml?.substring(0, 50));
+        return null;
+      })()}
       <WebView
-        ref={webViewRef}
+        key={`webview-${chapterId}`}
+        ref={(ref) => {
+          webViewRef.current = ref;
+          console.log('[ImageReader] WebView ref set:', !!ref);
+        }}
         style={styles.webview}
         source={{ html: imageHtml }}
         javaScriptEnabled
@@ -280,6 +554,19 @@ export default function ImageReaderScreen() {
         mixedContentMode="always"
         originWhitelist={['*']}
         allowFileAccess
+        onLoad={() => console.log('[WebView] onLoad fired')}
+        onError={(e) => console.error('[WebView] onError:', e.nativeEvent)}
+        onLoadStart={() => console.log('[WebView] onLoadStart fired')}
+        onLoadEnd={() => console.log('[WebView] onLoadEnd fired')}
+        injectedJavaScriptBeforeContentLoaded={`
+          console.log('[WebView] HTML document starting to load');
+          window.addEventListener('DOMContentLoaded', function() {
+            console.log('[WebView] DOMContentLoaded fired');
+          });
+          window.addEventListener('error', function(e) {
+            console.error('[WebView] Window error:', e.message);
+          });
+        `}
       />
 
       {showHeader && totalPages > 0 && (
@@ -375,4 +662,77 @@ const makeStyles = (colors: ColorScheme) => StyleSheet.create({
     gap: Spacing.md,
   },
   loadingText: { fontSize: Typography.base, color: colors.textSecondary },
+  // Settings Panel Styles
+  settingsPanel: {
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    zIndex: 30,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  settingsContent: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: Radius.lg,
+    padding: Spacing.xl,
+    width: '100%',
+    maxWidth: 360,
+    gap: Spacing.lg,
+  },
+  settingsTitle: {
+    fontSize: Typography.lg,
+    fontWeight: Typography.bold,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
+  },
+  settingRow: {
+    gap: Spacing.sm,
+  },
+  settingLabel: {
+    fontSize: Typography.sm,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    fontWeight: Typography.semibold,
+  },
+  settingButtons: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  settingBtn: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  settingBtnActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  settingBtnText: {
+    fontSize: Typography.sm,
+    color: colors.textSecondary,
+    fontWeight: Typography.medium,
+  },
+  settingBtnTextActive: {
+    color: colors.textOnAccent,
+    fontWeight: Typography.bold,
+  },
+  closeSettingsBtn: {
+    marginTop: Spacing.sm,
+    paddingVertical: Spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+  },
+  closeSettingsText: {
+    fontSize: Typography.base,
+    color: colors.textPrimary,
+    fontWeight: Typography.semibold,
+  },
 });

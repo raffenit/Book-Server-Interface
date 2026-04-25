@@ -1,9 +1,10 @@
 /**
  * GenreTagContextMenu
  * Floating modal triggered by right-click (web) or long-press on a genre/tag chip.
- * Lets the user remove a genre or tag from all series that have it.
+ * Lets the user remove a genre or tag from all series that have it,
+ * or add it to other series.
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Modal,
   View,
@@ -13,11 +14,18 @@ import {
   TouchableWithoutFeedback,
   ActivityIndicator,
   useWindowDimensions,
+  TextInput,
+  ScrollView,
 } from 'react-native';
 import { kavitaAPI } from '../services/kavitaAPI';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+
+interface SeriesItem {
+  id: number;
+  name: string;
+}
 
 export interface ChipContextMenuPosition {
   x: number;
@@ -34,30 +42,50 @@ interface Props {
   position: ChipContextMenuPosition;
   onClose: () => void;
   onRemoved: () => void;
+  onAdded?: () => void;
+  allSeries?: SeriesItem[];
 }
 
 export default function GenreTagContextMenu({
-  visible, itemId, itemTitle, itemType, position, onClose, onRemoved,
+  visible, itemId, itemTitle, itemType, position, onClose, onRemoved, onAdded, allSeries = [],
 }: Props) {
   const { width, height } = useWindowDimensions();
   const { colors } = useTheme();
-  const [confirming, setConfirming] = useState(false);
+  const [mode, setMode] = useState<'menu' | 'confirm-remove' | 'add-select' | 'working' | 'done'>('menu');
   const [working, setWorking] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSeriesIds, setSelectedSeriesIds] = useState<Set<number>>(new Set());
+
+  const filteredSeries = useMemo(() => {
+    if (!searchQuery.trim()) return allSeries;
+    const q = searchQuery.toLowerCase();
+    return allSeries.filter(s => s.name.toLowerCase().includes(q));
+  }, [allSeries, searchQuery]);
 
   function handleClose() {
-    setConfirming(false);
+    setMode('menu');
     setWorking(false);
     setProgress(null);
     setError('');
-    setDone(false);
+    setSearchQuery('');
+    setSelectedSeriesIds(new Set());
     onClose();
+  }
+
+  function toggleSeriesSelection(id: number) {
+    setSelectedSeriesIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   async function runRemove() {
     if (itemId == null || !itemType) return;
+    setMode('working');
     setWorking(true);
     setError('');
     setProgress({ done: 0, total: 0 });
@@ -68,10 +96,39 @@ export default function GenreTagContextMenu({
       } else {
         await kavitaAPI.removeTagFromAllSeries(itemId, onProgress);
       }
-      setDone(true);
+      setMode('done');
       setTimeout(() => { onRemoved(); handleClose(); }, 1000);
     } catch (e: any) {
       setError(e?.message ?? 'Something went wrong');
+      setMode('confirm-remove');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function runAddToSeries() {
+    if (itemId == null || !itemType || selectedSeriesIds.size === 0) return;
+    setMode('working');
+    setWorking(true);
+    setError('');
+    setProgress({ done: 0, total: selectedSeriesIds.size });
+    try {
+      const item = { id: itemId, title: itemTitle };
+      let done = 0;
+      for (const seriesId of selectedSeriesIds) {
+        if (itemType === 'genre') {
+          await kavitaAPI.addGenreToSeries(seriesId, item);
+        } else {
+          await kavitaAPI.addTagToSeries(seriesId, item);
+        }
+        done++;
+        setProgress({ done, total: selectedSeriesIds.size });
+      }
+      setMode('done');
+      setTimeout(() => { onAdded?.(); handleClose(); }, 1000);
+    } catch (e: any) {
+      setError(e?.message ?? 'Something went wrong');
+      setMode('add-select');
     } finally {
       setWorking(false);
     }
@@ -97,20 +154,94 @@ export default function GenreTagContextMenu({
           </TouchableOpacity>
         </View>
 
-        {!confirming && !working && !done && (
-          <TouchableOpacity style={styles.actionRow} onPress={() => setConfirming(true)} activeOpacity={0.75}>
-            <Ionicons name="trash-outline" size={16} color={colors.error} />
-            <Text style={[styles.actionText, { color: colors.error }]}>Remove from all series</Text>
-          </TouchableOpacity>
+        {/* Main Menu */}
+        {mode === 'menu' && (
+          <View>
+            <TouchableOpacity style={styles.actionRow} onPress={() => setMode('add-select')} activeOpacity={0.75}>
+              <Ionicons name="add-circle-outline" size={16} color={colors.accent} />
+              <Text style={[styles.actionText, { color: colors.accent }]}>Add to other series</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionRow} onPress={() => setMode('confirm-remove')} activeOpacity={0.75}>
+              <Ionicons name="trash-outline" size={16} color={colors.error} />
+              <Text style={[styles.actionText, { color: colors.error }]}>Remove from all series</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
-        {confirming && !working && (
+        {/* Add to Series Selection */}
+        {mode === 'add-select' && (
+          <View style={styles.addSelectArea}>
+            <Text style={[styles.confirmText, { color: colors.textPrimary, marginBottom: Spacing.sm }]}>
+              Select series to add "{itemTitle}" to:
+            </Text>
+            <TextInput
+              style={[styles.searchInput, { 
+                backgroundColor: colors.background, 
+                color: colors.textPrimary,
+                borderColor: colors.border 
+              }]}
+              placeholder="Search series..."
+              placeholderTextColor={colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <ScrollView style={styles.seriesList} showsVerticalScrollIndicator={false}>
+              {filteredSeries.map(series => {
+                const isSelected = selectedSeriesIds.has(series.id);
+                return (
+                  <TouchableOpacity
+                    key={series.id}
+                    style={[styles.seriesItem, { 
+                      backgroundColor: isSelected ? colors.accentSoft : 'transparent',
+                      borderColor: isSelected ? colors.accent : colors.border 
+                    }]}
+                    onPress={() => toggleSeriesSelection(series.id)}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons 
+                      name={isSelected ? 'checkbox' : 'square-outline'} 
+                      size={16} 
+                      color={isSelected ? colors.accent : colors.textMuted} 
+                    />
+                    <Text 
+                      numberOfLines={1} 
+                      style={[styles.seriesName, { color: isSelected ? colors.accent : colors.textPrimary }]}
+                    >
+                      {series.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              {filteredSeries.length === 0 && (
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No series found</Text>
+              )}
+            </ScrollView>
+            <View style={[styles.confirmButtons, { marginTop: Spacing.md }]}>
+              <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => setMode('menu')}>
+                <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.deleteBtn, { 
+                  backgroundColor: selectedSeriesIds.size > 0 ? colors.accent : colors.border,
+                  opacity: selectedSeriesIds.size > 0 ? 1 : 0.5
+                }]} 
+                onPress={runAddToSeries}
+                disabled={selectedSeriesIds.size === 0}
+              >
+                <Text style={styles.deleteBtnText}>Add ({selectedSeriesIds.size})</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Confirm Remove */}
+        {mode === 'confirm-remove' && (
           <View style={styles.confirmArea}>
             <Text style={[styles.confirmText, { color: colors.textPrimary }]}>
               Remove "{itemTitle}" from every series that has it?
             </Text>
             <View style={styles.confirmButtons}>
-              <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => setConfirming(false)}>
+              <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => setMode('menu')}>
                 <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.deleteBtn, { backgroundColor: colors.error }]} onPress={runRemove}>
@@ -120,7 +251,8 @@ export default function GenreTagContextMenu({
           </View>
         )}
 
-        {working && (
+        {/* Working State */}
+        {mode === 'working' && (
           <View style={styles.progressArea}>
             <ActivityIndicator color={colors.accent} />
             {progress && progress.total > 0 && (
@@ -134,7 +266,8 @@ export default function GenreTagContextMenu({
           </View>
         )}
 
-        {done && (
+        {/* Done State */}
+        {mode === 'done' && (
           <View style={styles.progressArea}>
             <Ionicons name="checkmark-circle" size={20} color={colors.success} />
             <Text style={[styles.progressText, { color: colors.textSecondary }]}>Done!</Text>
@@ -185,6 +318,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  addSelectArea: {
+    padding: Spacing.md,
+    maxHeight: 350,
+  },
+  searchInput: {
+    height: 36,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.sm,
+    fontSize: Typography.sm,
+    marginBottom: Spacing.sm,
+  },
+  seriesList: {
+    maxHeight: 200,
+  },
+  seriesItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    marginBottom: Spacing.xs,
+  },
+  seriesName: {
+    flex: 1,
+    fontSize: Typography.sm,
+  },
+  emptyText: {
+    fontSize: Typography.sm,
+    textAlign: 'center',
     paddingVertical: Spacing.md,
   },
   actionText: {

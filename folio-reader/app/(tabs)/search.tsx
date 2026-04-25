@@ -7,12 +7,14 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LibraryFactory } from '../../services/LibraryFactory';
 import { LibraryItem } from '../../services/LibraryProvider';
 import { SearchFactory } from '../../services/SearchFactory';
-import { SeriesCard, useGridColumns } from '../../components/SeriesCard';
+import { SeriesCard } from '../../components/SeriesCard';
+import { useGridColumns } from '../../hooks/useGridColumns';
 import SeriesContextMenu from '../../components/SeriesContextMenu';
 import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
 import { useAuth } from '../../contexts/AuthContext';
@@ -65,26 +67,38 @@ export default function SearchScreen() {
     setSearched(false);
   }
 
-  const handleOpenMenu = (seriesId: string | number, seriesName: string, x: number, y: number) => {
-    openMenu(seriesId, seriesName, x, y);
+  const handleOpenMenu = (seriesId: string | number, seriesName: string, x: number, y: number, provider: 'kavita' | 'abs' = 'kavita') => {
+    // Convert string IDs to numbers for Kavita, keep as-is for ABS
+    const normalizedId = provider === 'kavita' && typeof seriesId === 'string' 
+      ? parseInt(seriesId, 10) 
+      : seriesId;
+    if (normalizedId === null || normalizedId === undefined || normalizedId === '') return;
+    openMenu(normalizedId, seriesName, x, y, provider);
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {
+      backgroundColor: Platform.OS === 'web' ? 'rgba(5, 6, 15, 0.15)' : colors.background,
+    } as any]}>
       <TabHeader 
         title="Search" 
         count={searched ? results.length : undefined} 
         countLabel="results" 
       />
+      <View style={{ height: Spacing.md }} />
       
       <View style={styles.searchSection}>
-        <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.searchBar, {
+          backgroundColor: Platform.OS === 'web' ? `${colors.surface}80` : colors.surface,
+          borderColor: colors.border,
+          backdropFilter: Platform.OS === 'web' ? 'blur(12px)' : undefined,
+        } as any]}>
           <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
             style={[styles.input, { color: colors.textPrimary }]}
             value={query}
             onChangeText={onChangeText}
-            placeholder="Search series, titles, authors…"
+            placeholder="Search titles, authors, genres…"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             returnKeyType="search"

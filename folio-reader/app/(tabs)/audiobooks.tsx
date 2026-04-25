@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Image, TouchableOpacity,
-  ActivityIndicator, RefreshControl, DeviceEventEmitter
+  ActivityIndicator, RefreshControl, DeviceEventEmitter, Platform, ScrollView, useWindowDimensions
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,19 @@ import { absAPI } from '../../services/audiobookshelfAPI';
 import { useAudioPlayer } from '../../contexts/AudioPlayerContext';
 import { Colors, Typography, Spacing, Radius } from '../../constants/theme';
 import TabHeader from '../../components/TabHeader';
+import { useTheme } from '../../contexts/ThemeContext';
+import GenreTagContextMenu, { ChipType } from '../../components/GenreTagContextMenu';
+import SeriesContextMenu from '../../components/SeriesContextMenu';
+import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
+import { ContinueSection, ContinueItem } from '../../components/ContinueSection';
+import { AudiobookCard } from '../../components/AudiobookCard';
+import { FilterSection } from '../../components/FilterComponents';
+import { useGridColumns } from '../../hooks/useGridColumns';
+
+interface FilterItem {
+  id: string;
+  title: string;
+}
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '';
@@ -20,58 +33,18 @@ function formatDuration(seconds: number): string {
   return `${m}m`;
 }
 
-import { useTheme } from '../../contexts/ThemeContext';
-
-function AudiobookCard({ item, onPress, onPlay, isPlaying }: {
-  item: LibraryItem;
-  onPress: () => void;
-  onPlay: () => void;
-  isPlaying: boolean;
-}) {
-  const { colors } = useTheme();
-  const progressPct = item.progress ? Math.round(item.progress * 100) : 0;
-  const provider = LibraryFactory.getProvider('abs');
-  const coverUri = (provider as any).getCoverUrl?.(item.id) || '';
-
-  return (
-    <TouchableOpacity style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={onPress} activeOpacity={0.8}>
-      <View style={styles.coverWrapper}>
-        <Image source={{ uri: coverUri }} style={[styles.cover, { backgroundColor: colors.surfaceElevated }]} resizeMode="cover" />
-        {progressPct > 0 && (
-          <View style={[styles.progressBar, { backgroundColor: colors.progressTrack }]}>
-            <View style={[styles.progressFill, { width: `${progressPct}%` as any, backgroundColor: colors.accent }]} />
-          </View>
-        )}
-      </View>
-      <View style={styles.cardInfo}>
-        <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={2}>{item.title}</Text>
-        {item.author ? (
-          <Text style={[styles.cardAuthor, { color: colors.textSecondary }]} numberOfLines={1}>{item.author}</Text>
-        ) : null}
-        {item.duration ? (
-          <Text style={[styles.cardDuration, { color: colors.textMuted }]}>{item.durationFormatted || formatDuration(item.duration)}</Text>
-        ) : null}
-      </View>
-      <TouchableOpacity onPress={onPlay} style={styles.playBtn} hitSlop={8}>
-        <Ionicons
-          name={isPlaying ? 'pause-circle' : 'play-circle'}
-          size={36}
-          color={colors.accent}
-        />
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-}
-
 export default function AudiobooksScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { nowPlaying, isPlaying, play, togglePlayPause } = useAudioPlayer();
+  const { numColumns, cardWidth } = useGridColumns();
+  const { ctx: ctxMenu, openMenu, closeMenu, openDetail } = useSeriesContextMenu();
 
   const [connected, setConnected] = useState(true);
   const [libraries, setLibraries] = useState<any[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
   const [items, setItems] = useState<LibraryItem[]>([]);
+  const [allItems, setAllItems] = useState<LibraryItem[]>([]); // For filtering
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(0);
@@ -79,26 +52,170 @@ export default function AudiobooksScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
 
+  // Filter states
+  const [genres, setGenres] = useState<FilterItem[]>([]);
+  const [authors, setAuthors] = useState<FilterItem[]>([]);
+  const [tags, setTags] = useState<FilterItem[]>([]);
+  const [collections, setCollections] = useState<FilterItem[]>([]);
+  const [selectedGenreId, setSelectedGenreId] = useState<string | null>(null);
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [collectionItems, setCollectionItems] = useState<Set<string>>(new Set());
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [activeFilterTab, setActiveFilterTab] = useState<'library' | 'genre' | 'author' | 'tag' | 'collection'>('library');
+  const [showContinueListening, setShowContinueListening] = useState(true);
+
+  // Chip context menu state
+  const [chipMenu, setChipMenu] = useState<{
+    visible: boolean;
+    itemId: string | null;
+    itemTitle: string;
+    itemType: ChipType | null;
+    position: { x: number; y: number };
+  }>({ visible: false, itemId: null, itemTitle: '', itemType: null, position: { x: 0, y: 0 } });
+
+  function openChipMenu(item: FilterItem, type: ChipType, x: number, y: number) {
+    setChipMenu({ visible: true, itemId: item.id, itemTitle: item.title, itemType: type, position: { x, y } });
+  }
+
+  function closeChipMenu() {
+    setChipMenu(prev => ({ ...prev, visible: false }));
+  }
+
+  // Extract unique genres, authors, and tags from items
+  const extractFilters = useCallback((items: LibraryItem[]) => {
+    const genreMap = new Map<string, string>();
+    const authorMap = new Map<string, string>();
+    const tagMap = new Map<string, string>();
+    
+    items.forEach(item => {
+      // Extract genres from metadata
+      const itemGenres = (item as any).media?.metadata?.genres || [];
+      itemGenres.forEach((g: string) => {
+        if (g && !genreMap.has(g)) {
+          genreMap.set(g, g);
+        }
+      });
+      
+      // Extract tags from metadata
+      const itemTags = (item as any).media?.metadata?.tags || [];
+      itemTags.forEach((t: string) => {
+        if (t && !tagMap.has(t)) {
+          tagMap.set(t, t);
+        }
+      });
+      
+      // Extract author
+      const author = item.author || (item as any).media?.metadata?.author;
+      if (author && !authorMap.has(author)) {
+        authorMap.set(author, author);
+      }
+    });
+    
+    const genreItems: FilterItem[] = Array.from(genreMap.entries())
+      .map(([id, title]) => ({ id, title }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+    
+    const authorItems: FilterItem[] = Array.from(authorMap.entries())
+      .map(([id, title]) => ({ id, title }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+    
+    const tagItems: FilterItem[] = Array.from(tagMap.entries())
+      .map(([id, title]) => ({ id, title }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+    
+    setGenres(genreItems);
+    setAuthors(authorItems);
+    setTags(tagItems);
+  }, [])
+
+  // Fetch collections from ABS
+  const fetchCollections = useCallback(async () => {
+    try {
+      const absCollections = await absAPI.getCollections();
+      const collectionItems: FilterItem[] = absCollections
+        .map((c: any) => ({ id: c.id, title: c.name || c.title }))
+        .sort((a: FilterItem, b: FilterItem) => a.title.localeCompare(b.title));
+      setCollections(collectionItems);
+    } catch {
+      // Failed to fetch collections
+    }
+  }, []);
+
+  // Fetch items in selected collection
+  const fetchCollectionItems = useCallback(async (collectionId: string) => {
+    try {
+      const collection = await absAPI.getCollection(collectionId);
+      const itemIds = new Set<string>();
+      // ABS returns items in .books or .items property
+      const items = collection.books || collection.items || [];
+      items.forEach((item: any) => {
+        const id = item.id || item.libraryItemId;
+        if (id) itemIds.add(String(id));
+      });
+      setCollectionItems(itemIds);
+    } catch {
+      setCollectionItems(new Set());
+    }
+  }, []);
+
+  // Filter items based on selected filters
+  const filterItems = useCallback((allItems: LibraryItem[]) => {
+    let filtered = allItems;
+    
+    if (selectedCollectionId) {
+      // When collection is selected, only show items in that collection
+      filtered = filtered.filter(item => collectionItems.has(String(item.id)));
+    }
+    
+    if (selectedGenreId) {
+      filtered = filtered.filter(item => {
+        const itemGenres = (item as any).media?.metadata?.genres || [];
+        return itemGenres.includes(selectedGenreId);
+      });
+    }
+    
+    if (selectedTagId) {
+      filtered = filtered.filter(item => {
+        const itemTags = (item as any).media?.metadata?.tags || [];
+        return itemTags.includes(selectedTagId);
+      });
+    }
+    
+    if (selectedAuthorId) {
+      filtered = filtered.filter(item => {
+        const author = item.author || (item as any).media?.metadata?.author;
+        return author === selectedAuthorId;
+      });
+    }
+    
+    return filtered;
+  }, [selectedGenreId, selectedAuthorId, selectedTagId, selectedCollectionId, collectionItems]);
+
   const fetchItems = useCallback(async (libraryId: string, pageNum: number, reset: boolean) => {
-    console.log('[Audiobooks] fetchItems called with libraryId:', libraryId, 'page:', pageNum);
     try {
       const provider = LibraryFactory.getProvider('abs');
       const data = await provider.getLibraryItems({ libraryId, page: pageNum, limit: 40 });
-      console.log('[Audiobooks] Fetched', data.length, 'items from library', libraryId);
-      if (data.length > 0) {
-        console.log('[Audiobooks] First item:', JSON.stringify(data[0]).slice(0, 200));
-      }
       
       if (reset) {
-        setItems(data);
+        setAllItems(data);
+        setItems(filterItems(data));
+        extractFilters(data);
       } else {
-        setItems(prev => [...prev, ...data]);
+        // Use functional update to avoid dependency on allItems
+        setAllItems(prev => {
+          const newAllItems = [...prev, ...data];
+          // Apply filters after state update
+          setItems(filterItems(newAllItems));
+          extractFilters(newAllItems);
+          return newAllItems;
+        });
       }
       setPage(pageNum);
-      // ABS total count is hard to get via generic interface for now, so we just check if we got a full page
       setHasMore(data.length === 40);
     } catch (e: any) {
-      console.error('[Audiobooks] Failed to fetch audiobook items:', e);
+      // Failed to fetch audiobook items
       const isNetworkError = !e.response && (e.code === 'ECONNABORTED' || e.message?.includes('Network Error') || e.message?.includes('timeout'));
       if (isNetworkError) {
         setNetworkError('Server unreachable. Check your connection or ABS server URL in Settings.');
@@ -108,18 +225,15 @@ export default function AudiobooksScreen() {
       setRefreshing(false);
       setLoading(false);
     }
-  }, []);
+  }, [extractFilters, filterItems]);
 
   const initialize = useCallback(async () => {
-    console.log('[Audiobooks] Starting initialization...');
     setLoading(true);
     const provider = LibraryFactory.getProvider('abs');
     await provider.initialize();
     
     const isAuth = await provider.isAuthenticated();
-    console.log('[Audiobooks] isAuthenticated:', isAuth);
     if (!isAuth) {
-      console.log('[Audiobooks] Not authenticated, showing not connected');
       setConnected(false);
       setLoading(false);
       return;
@@ -129,25 +243,25 @@ export default function AudiobooksScreen() {
     try {
       // Libraries are still ABS specific for this tab's picker
       const { absAPI } = await import('../../services/audiobookshelfAPI');
-      console.log('[Audiobooks] Fetching libraries from absAPI...');
       const libs = await absAPI.getLibraries();
-      console.log('[Audiobooks] Got', libs.length, 'libraries:', libs.map(l => ({ id: l.id, name: l.name, mediaType: l.mediaType })));
       setLibraries(libs);
       
       const currentLib = selectedLibraryId && libs.some(l => l.id === selectedLibraryId) 
         ? selectedLibraryId 
         : libs[0]?.id ?? null;
-      console.log('[Audiobooks] Selected library:', currentLib);
       
-      setSelectedLibraryId(currentLib);
+      if (currentLib && currentLib !== selectedLibraryId) {
+        setSelectedLibraryId(currentLib);
+      }
       if (currentLib) {
         await fetchItems(currentLib, 0, true);
+        // Fetch collections for the filter row
+        fetchCollections();
       } else {
-        console.log('[Audiobooks] No library selected, stopping load');
         setLoading(false);
       }
     } catch (err: any) {
-      console.error('[Audiobooks] Initialization error:', err);
+      // Initialization error
       const isNetworkError = !err.response && (err.code === 'ECONNABORTED' || err.message?.includes('Network Error') || err.message?.includes('timeout'));
       if (isNetworkError) {
         setNetworkError('Server unreachable. Check your connection or ABS server URL in Settings.');
@@ -155,18 +269,20 @@ export default function AudiobooksScreen() {
       setConnected(false);
       setLoading(false);
     }
-  }, [selectedLibraryId, fetchItems]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
 
   useFocusEffect(
     useCallback(() => {
       initialize();
+      // Refresh the continue listening setting in case it changed
+      setShowContinueListening(absAPI.isProgressTrackingEnabled());
     }, [initialize])
   );
 
   // Refresh when playback is stopped (to sync progress bars)
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('FOLIO_PLAYBACK_STOPPED', () => {
-      console.log('[AudiobooksScreen] Playback stop detected, refreshing library...');
       if (selectedLibraryId) {
         fetchItems(selectedLibraryId, 0, true);
       }
@@ -188,14 +304,42 @@ export default function AudiobooksScreen() {
     fetchItems(selectedLibraryId, page + 1, false);
   }
 
-  async function selectLibrary(idRaw: string | number) {
-    const id = String(idRaw);
+  async function selectLibrary(idRaw: string | number | null) {
+    const id = idRaw === null ? 'null' : String(idRaw);
     if (id === selectedLibraryId) return;
     setSelectedLibraryId(id);
     setLoading(true);
     setItems([]);
+    setAllItems([]);
+    setSelectedGenreId(null);
+    setSelectedAuthorId(null);
     await fetchItems(id, 0, true);
   }
+
+  // Apply filters when selection changes
+  useEffect(() => {
+    if (allItems.length > 0) {
+      setItems(filterItems(allItems));
+    }
+  }, [selectedGenreId, selectedAuthorId, selectedTagId, selectedCollectionId, collectionItems, allItems, filterItems]);
+
+  // Fetch collection items when collection selection changes
+  useEffect(() => {
+    if (selectedCollectionId) {
+      fetchCollectionItems(selectedCollectionId);
+    } else {
+      setCollectionItems(new Set());
+    }
+  }, [selectedCollectionId, fetchCollectionItems]);
+
+  // Continue listening: items with progress > 0 and < 100%
+  const continueListening = useMemo(() => {
+    const withProgress = allItems.filter(item => item.progress && item.progress > 0 && item.progress < 1)
+      .sort((a, b) => (b.progress || 0) - (a.progress || 0))
+      .slice(0, 10);
+    console.log('[ContinueListening] Total items:', allItems.length, 'With progress:', withProgress.length, 'Sample progress values:', allItems.slice(0, 3).map(i => ({ title: i.title?.substring(0, 20), progress: i.progress })));
+    return withProgress;
+  }, [allItems]);
 
   async function handlePlay(item: LibraryItem) {
     if (nowPlaying?.item.id === item.id) {
@@ -228,16 +372,16 @@ export default function AudiobooksScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, {
+      zIndex: 1,
+      backgroundColor: Platform.OS === 'web' ? colors.overlay : colors.background,
+    } as any]}>
       <TabHeader 
         title="Audiobooks" 
         count={items.length} 
         countLabel="items" 
         hasMore={hasMore} 
         serverName="Audiobookshelf" 
-        libraries={libraries}
-        selectedLibraryId={selectedLibraryId}
-        onSelectLibrary={selectLibrary}
       />
 
       {networkError && items.length === 0 ? (
@@ -264,49 +408,133 @@ export default function AudiobooksScreen() {
           <ActivityIndicator color={colors.accent} size="large" />
         </View>
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={i => String(i.id)}
-          contentContainerStyle={styles.list}
+        <>
+          {/* Filter Section - Outside margin container for full width */}
+          <FilterSection
+            libraries={libraries}
+            genres={genres}
+            authors={authors}
+            tags={tags}
+            collections={collections}
+            selectedLibraryId={selectedLibraryId}
+            selectedGenreId={selectedGenreId}
+            selectedAuthorId={selectedAuthorId}
+            selectedTagId={selectedTagId}
+            selectedCollectionId={selectedCollectionId}
+            onSelectLibrary={selectLibrary}
+            onSelectGenre={(id) => setSelectedGenreId(id as string | null)}
+            onSelectAuthor={(id) => setSelectedAuthorId(id as string | null)}
+            onSelectTag={(id) => setSelectedTagId(id as string | null)}
+            onSelectCollection={(id) => setSelectedCollectionId(id as string | null)}
+            defaultTab="library"
+            onClearAll={() => { selectLibrary(null); setSelectedGenreId(null); setSelectedAuthorId(null); setSelectedTagId(null); setSelectedCollectionId(null); }}
+          />
+
+        <View style={{ flex: 1, marginHorizontal: Spacing.base }}>
+          <FlatList
+            key={numColumns}
+            data={items}
+            keyExtractor={i => String(i.id)}
+            numColumns={numColumns}
+            contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: Spacing.base, gap: Spacing.sm }}
+            columnWrapperStyle={{ gap: Spacing.sm, marginBottom: Spacing.sm }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.accent} style={{ padding: Spacing.xl }} /> : null}
+          ListHeaderComponent={
+            <View>
+              {showContinueListening && (
+                <ContinueSection
+                  title="Continue Listening"
+                  items={continueListening.map((item): ContinueItem => ({
+                    id: item.id,
+                    title: item.title,
+                    subtitle: item.author,
+                    coverUrl: (LibraryFactory.getProvider('abs') as any).getCoverUrl?.(item.id) || '',
+                    progress: item.progress ? item.progress * 100 : 0,
+                  }))}
+                  onPressItem={(item) => router.push(`/audiobook/${item.id}`)}
+                />
+              )}
+            </View>
+          }
           ListEmptyComponent={
             <View style={[styles.centered, { gap: Spacing.md }]}>
               <Ionicons name="headset-outline" size={48} color={colors.textMuted} />
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No audiobooks found</Text>
               <Text style={[styles.emptyText, { color: colors.textSecondary, textAlign: 'center' }]}>
-                Your Audiobookshelf library appears to be empty. Try scanning for new files.
+                {selectedGenreId || selectedAuthorId 
+                  ? 'Try clearing filters to see more results.'
+                  : 'Your Audiobookshelf library appears to be empty. Try scanning for new files.'}
               </Text>
-              <TouchableOpacity
-                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.accent, borderRadius: Radius.md, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl, marginTop: Spacing.sm }}
-                onPress={async () => {
-                  try {
-                    await absAPI.scanAllLibraries();
-                    // Refresh after a short delay to let scan start
-                    setTimeout(() => onRefresh(), 2000);
-                  } catch (e) {
-                    console.error('ABS Scan failed', e);
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="refresh-outline" size={18} color={colors.textOnAccent} style={{ marginRight: 8 }} />
-                <Text style={{ color: colors.textOnAccent, fontSize: Typography.base, fontWeight: Typography.bold }}>Scan Library</Text>
-              </TouchableOpacity>
+              {!selectedGenreId && !selectedAuthorId && (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.accent, borderRadius: Radius.md, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl, marginTop: Spacing.sm }}
+                  onPress={async () => {
+                    try {
+                      await absAPI.scanAllLibraries();
+                      setTimeout(() => onRefresh(), 2000);
+                    } catch {
+                      // ABS Scan failed
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="refresh-outline" size={18} color={colors.textOnAccent} style={{ marginRight: 8 }} />
+                  <Text style={{ color: colors.textOnAccent, fontSize: Typography.base, fontWeight: Typography.bold }}>Scan Library</Text>
+                </TouchableOpacity>
+              )}
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={({ item }: { item: LibraryItem }) => (
             <AudiobookCard
               item={item}
+              cardWidth={cardWidth}
               onPress={() => router.push(`/audiobook/${item.id}`)}
               onPlay={() => handlePlay(item)}
               isPlaying={isPlaying && nowPlaying?.item.id === item.id}
+              onContextMenu={(id, title, x, y) => openMenu(id, title, x, y, 'abs')}
             />
           )}
         />
+        </View>
+      </>
       )}
+
+      <GenreTagContextMenu
+        visible={chipMenu.visible}
+        itemId={chipMenu.itemId ? parseInt(chipMenu.itemId) : null}
+        itemTitle={chipMenu.itemTitle}
+        itemType={chipMenu.itemType}
+        position={chipMenu.position}
+        onClose={closeChipMenu}
+        onRemoved={() => {
+          const id = chipMenu.itemId;
+          if (id == null) return;
+          if (chipMenu.itemType === 'genre') {
+            setGenres(prev => prev.filter(g => g.id !== id));
+            if (selectedGenreId === id) setSelectedGenreId(null);
+          } else {
+            setTags(prev => prev.filter(t => t.id !== id));
+            if (selectedTagId === id) setSelectedTagId(null);
+          }
+          closeChipMenu();
+        }}
+        onAdded={() => {
+          closeChipMenu();
+        }}
+      />
+
+      <SeriesContextMenu
+        visible={ctxMenu.visible}
+        seriesId={ctxMenu.seriesId}
+        seriesName={ctxMenu.seriesName}
+        position={ctxMenu.position}
+        onClose={closeMenu}
+        onOpenDetail={openDetail}
+        provider={ctxMenu.provider}
+      />
     </View>
   );
 }
@@ -315,102 +543,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: Spacing.base,
-    paddingBottom: Spacing.md,
-  },
-  title: {
-    fontSize: Typography.xxl,
-    fontWeight: Typography.bold,
-    color: Colors.textPrimary,
-    fontFamily: 'Georgia',
-  },
-  libraryPicker: {
-    paddingHorizontal: Spacing.base,
-    paddingBottom: Spacing.md,
-    gap: Spacing.sm,
-  },
-  libChip: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  libChipActive: {
-    backgroundColor: Colors.accentSoft,
-    borderColor: Colors.accent,
-  },
-  libChipText: {
-    fontSize: Typography.sm,
-    color: Colors.textSecondary,
-    fontWeight: Typography.medium,
-  },
-  libChipTextActive: {
-    color: Colors.accent,
-    fontWeight: Typography.semibold,
-  },
-  list: {
-    paddingHorizontal: Spacing.base,
-    paddingBottom: 120,
-    gap: Spacing.sm,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.md,
-    gap: Spacing.md,
-  },
-  coverWrapper: {
-    position: 'relative',
-  },
-  cover: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceElevated,
-  },
-  progressBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: Colors.progressTrack,
-    borderBottomLeftRadius: Radius.sm,
-    borderBottomRightRadius: Radius.sm,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 3,
-    backgroundColor: Colors.accent,
-  },
-  cardInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  cardTitle: {
-    fontSize: Typography.base,
-    fontWeight: Typography.semibold,
-    color: Colors.textPrimary,
-  },
-  cardAuthor: {
-    fontSize: Typography.sm,
-    color: Colors.textSecondary,
-  },
-  cardDuration: {
-    fontSize: Typography.xs,
-    color: Colors.textMuted,
-  },
-  playBtn: {
-    padding: 4,
   },
   centered: {
     flex: 1,
@@ -452,4 +584,13 @@ const styles = StyleSheet.create({
     fontWeight: Typography.bold,
     color: Colors.textOnAccent,
   },
+  card: {
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  // Web hover effect placeholder - real styling via CSS class
+  cardHover: {} as any,
 });

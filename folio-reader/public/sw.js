@@ -27,7 +27,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Pass through cross-origin calls, APIs, and client-side SPA routes
-  if (url.origin !== location.origin || url.pathname.includes('/api/') || url.pathname.includes('/proxy') || (!url.pathname.includes('.') && url.pathname !== '/')) {
+  if (url.origin !== location.origin || url.pathname.includes('/api/') || url.pathname.includes('/proxy') || url.pathname.includes('/dynamic-proxy') || (!url.pathname.includes('.') && url.pathname !== '/')) {
     return;
   }
 

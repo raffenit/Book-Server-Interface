@@ -1,6 +1,6 @@
 import { SearchProvider, SearchMetadataResult } from './SearchProvider';
-import { storage } from './storage';
-import { STORAGE_KEYS } from '../constants/config';
+import { credentials } from '@/config/credentials';
+import { proxyUrl } from '@/config/proxy';
 
 export class GoogleBooksSearchProvider implements SearchProvider {
   getSourceName(): string {
@@ -12,7 +12,7 @@ export class GoogleBooksSearchProvider implements SearchProvider {
   }
 
   private async buildSearchUrl(query: string, limit: number): Promise<string> {
-    const apiKey = await storage.getItem(STORAGE_KEYS.GOOGLE_BOOKS_API_KEY);
+    const apiKey = await credentials.googleBooks.getApiKey();
     // Get browser locale or default to US
     const country = typeof navigator !== 'undefined'
       ? (navigator.language?.split('-')[1] || 'US')
@@ -31,7 +31,7 @@ export class GoogleBooksSearchProvider implements SearchProvider {
     const url = await this.buildSearchUrl(query, limit);
 
     try {
-      const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+      const res = await fetch(proxyUrl(url));
 
       if (!res.ok) {
         let warn = `Google Books search returned ${res.status}`;
@@ -62,7 +62,7 @@ export class GoogleBooksSearchProvider implements SearchProvider {
             .map((s: string) => s.trim())
             .filter(Boolean),
           publisher: v.publisher,
-          coverUrl: thumbHttps ? `/proxy?url=${encodeURIComponent(thumbHttps)}` : undefined,
+          coverUrl: thumbHttps ? proxyUrl(thumbHttps) : undefined,
           coverUploadUrl: thumbHttps,
         };
       });

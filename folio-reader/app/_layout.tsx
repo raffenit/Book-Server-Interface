@@ -10,6 +10,7 @@ import { Colors } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { PWAInstallBanner } from '../components/PWAInstallBanner';
 import { MiniPlayer } from '../components/MiniPlayer';
+import { StarfieldBackground } from '../components/StarfieldBackground';
 import { kavitaAPI } from '../services/kavitaAPI';
 import { absAPI } from '../services/audiobookshelfAPI';
 import { useState, useEffect } from 'react';
@@ -68,7 +69,7 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ThemeProvider>
       <ProfileProvider>
       <AuthProvider>
@@ -111,20 +112,14 @@ function RootLayoutNav() {
   }, [isAuthenticated, isLoading, segments, activeProfile]);
 
   return (
-    <View style={{ flex: 1, height: '100vh', backgroundColor: colors.background }}>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+    <View style={{ flex: 1, height: '100vh', backgroundColor: 'transparent' }}>
+      <StarfieldBackground />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* Reader routes are handled by the nested reader/_layout.tsx */}
         <Stack.Screen
-          name="reader/pdf"
-          options={{
-            headerShown: false,
-            presentation: 'fullScreenModal',
-            animation: 'fade',
-          }}
-        />
-        <Stack.Screen
-          name="reader/epub"
+          name="reader"
           options={{
             headerShown: false,
             presentation: 'fullScreenModal',

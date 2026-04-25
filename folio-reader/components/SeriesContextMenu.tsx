@@ -29,11 +29,12 @@ export interface ContextMenuPosition {
 
 interface Props {
   visible: boolean;
-  seriesId: number | null;
+  seriesId: string | number | null;
   seriesName: string;
   position: ContextMenuPosition;
   onClose: () => void;
   onOpenDetail?: () => void;
+  provider?: 'kavita' | 'abs' | null;
 }
 
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
@@ -50,11 +51,14 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
 }
 
 export default function SeriesContextMenu({
-  visible, seriesId, seriesName, position, onClose, onOpenDetail,
+  visible, seriesId, seriesName, position, onClose, onOpenDetail, provider,
 }: Props) {
   const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
   const [loading, setLoading] = useState(false);
+  
+  // Normalize seriesId to number for Kavita API
+  const numericSeriesId = seriesId != null ? (typeof seriesId === 'string' ? parseInt(seriesId, 10) : seriesId) : null;
   const [saving, setSaving] = useState(false);
   const [metadata, setMetadata] = useState<SeriesMetadata | null>(null);
   const [allGenres, setAllGenres] = useState<Genre[]>([]);
@@ -77,10 +81,20 @@ export default function SeriesContextMenu({
   }, [visible, seriesId]);
 
   async function loadData() {
+    if (numericSeriesId == null) return;
     setLoading(true);
     try {
+      // Skip Kavita-specific data loading for ABS items
+      if (provider === 'abs') {
+        setMetadata(null);
+        setAllGenres([]);
+        setAllTags([]);
+        setAllCollections([]);
+        setCollectionsWithSeries(new Set());
+        return;
+      }
       const [meta, genres, tags, colls] = await Promise.all([
-        kavitaAPI.getSeriesMetadata(seriesId!),
+        kavitaAPI.getSeriesMetadata(numericSeriesId),
         kavitaAPI.getGenres(),
         kavitaAPI.getTags(),
         kavitaAPI.getCollections(),
@@ -94,10 +108,12 @@ export default function SeriesContextMenu({
       await Promise.all(
         colls.map(async (c) => {
           const series = await kavitaAPI.getSeriesForCollection(c.id);
-          if (series.some(s => s.id === seriesId)) inColls.add(c.id);
+          if (series?.some(s => s.id === numericSeriesId)) inColls.add(c.id);
         })
       );
       setCollectionsWithSeries(inColls);
+    } catch (e) {
+      console.error('[SeriesContextMenu] Failed to load data', e);
     } finally {
       setLoading(false);
     }
@@ -127,13 +143,14 @@ export default function SeriesContextMenu({
     setSaveError('');
     try {
       await kavitaAPI.updateSeriesMetadata(metadata);
+      if (numericSeriesId == null) return;
       await Promise.all(
         allCollections.map(async (c) => {
           const wasIn = collectionsWithSeries.has(c.id);
           const current = await kavitaAPI.getSeriesForCollection(c.id);
-          const isIn = current.some(s => s.id === seriesId);
-          if (!isIn && wasIn) await kavitaAPI.addSeriesToCollection(c.id, seriesId!);
-          if (isIn && !wasIn) await kavitaAPI.removeSeriesFromCollection(c, seriesId!);
+          const isIn = current.some(s => s.id === numericSeriesId);
+          if (!isIn && wasIn) await kavitaAPI.addSeriesToCollection(c.id, numericSeriesId);
+          if (isIn && !wasIn) await kavitaAPI.removeSeriesFromCollection(c, numericSeriesId);
         })
       );
       setSaved(true);

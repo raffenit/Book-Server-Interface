@@ -201,6 +201,13 @@ export class AudiobookshelfProvider implements LibraryProvider {
   }
 
   private mapABSToLibraryItem(item: ABSLibraryItem): LibraryItem {
+    // ABS can return progress in either userMediaProgress or mediaProgress
+    const rawProgress = item.userMediaProgress?.progress ?? item.mediaProgress?.progress ?? 0;
+    const isFinished = item.userMediaProgress?.isFinished ?? item.mediaProgress?.isFinished ?? false;
+    // Log first few items to debug progress data
+    if (Math.random() < 0.05) {
+      console.log('[ABS Map]', item.media?.metadata?.title?.substring(0, 30), 'rawProgress:', rawProgress, 'isFinished:', isFinished, 'hasMediaProgress:', !!item.mediaProgress, 'hasUserMediaProgress:', !!item.userMediaProgress);
+    }
     return {
       id: item.id,
       title: item.media.metadata.title || 'Unknown Title',
@@ -212,8 +219,8 @@ export class AudiobookshelfProvider implements LibraryProvider {
       narrator: item.media.metadata.narrator,
       duration: item.media.duration,
       durationFormatted: this.formatDuration(item.media.duration),
-      progress: item.userMediaProgress?.progress || 0,
-      isRead: item.userMediaProgress?.isFinished || false,
+      progress: rawProgress,
+      isRead: isFinished,
       provider: 'abs'
     };
   }

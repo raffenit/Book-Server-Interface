@@ -12,7 +12,8 @@ import {
 import { useRouter } from 'expo-router';
 import { LibraryFactory } from '../../services/LibraryFactory';
 import { LibraryGenre, LibraryTag, LibraryItem } from '../../services/LibraryProvider';
-import { SeriesCard, useGridColumns } from '../../components/SeriesCard';
+import { SeriesCard } from '../../components/SeriesCard';
+import { useGridColumns } from '../../hooks/useGridColumns';
 import SeriesContextMenu from '../../components/SeriesContextMenu';
 import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
 import { useAuth } from '../../contexts/AuthContext';
@@ -146,7 +147,7 @@ export default function BrowseScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.screenHeader}>
         <Text style={styles.screenTitle}>Browse</Text>
 
@@ -267,7 +268,6 @@ export default function BrowseScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   centered: {
     flex: 1,

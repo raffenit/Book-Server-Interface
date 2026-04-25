@@ -12,11 +12,14 @@ import { LibraryFactory } from '@/services/LibraryFactory';
 import { LibrarySeriesDetail } from '@/services/LibraryProvider';
 import { useAudioPlayer } from '@/contexts/AudioPlayerContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Typography, Spacing, Radius } from '@/constants/theme';
+import { Typography, Spacing, Radius, getGenreChipColors } from '@/constants/theme';
 import { EditMetadataModal } from '@/components/modals/EditMetadataModal';
 import { CoverPickerModal } from '@/components/modals/CoverPickerModal';
 import { MetadataSearchModal } from '@/components/modals/MetadataSearchModal';
+import { MarkdownText } from '@/components/MarkdownText';
 import { startReadingSession, endReadingSession } from '@/services/stats';
+import { proxyUrl } from '@/config/proxy';
+import { credentials } from '@/config/credentials';
 
 import Slider from '@react-native-community/slider';
 
@@ -222,9 +225,13 @@ export default function AudiobookPlayerScreen() {
     try {
       const data = await provider.getSeriesDetail(id);
       setItem(data);
-      // Play the first item in the series (for ABS detail, this is the item itself mapped as a series)
-      const absItem = await absAPI.getLibraryItem(String(id));
-      await play(absItem);
+      // Check auto-play setting before playing
+      const autoPlay = await credentials.abs.isAutoPlayEnabled();
+      if (autoPlay) {
+        // Play the first item in the series (for ABS detail, this is the item itself mapped as a series)
+        const absItem = await absAPI.getLibraryItem(String(id));
+        await play(absItem);
+      }
     } catch (e: any) {
       console.error('[AudiobookPlayer] failed:', e);
       setLoadError(e?.message || 'Failed to load audiobook');
@@ -564,23 +571,39 @@ export default function AudiobookPlayerScreen() {
               {/* Genres + tags chips */}
               {(displayGenres.length > 0 || displayTags.length > 0) && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
-                  {displayGenres.map((g: any) => (
-                    <View key={g.id || g.title} style={styles.metaChip}>
-                      <Text style={styles.metaChipText}>{g.title || g}</Text>
-                    </View>
-                  ))}
-                  {displayTags.map((t: any) => (
-                    <View key={t.id || t.title} style={[styles.metaChip, styles.metaChipTag]}>
-                      <Text style={[styles.metaChipText, styles.metaChipTagText]}>{t.title || t}</Text>
-                    </View>
-                  ))}
+                  {displayGenres.map((g: any) => {
+                    const chipColors = getGenreChipColors(g.title || g);
+                    return (
+                      <View key={g.id || g.title} style={[styles.metaChip, {
+                        backgroundColor: chipColors.gradientStart,
+                        borderColor: chipColors.borderColor,
+                      }]}>
+                        <Text style={[styles.metaChipText, { color: chipColors.textColor }]}>{g.title || g}</Text>
+                      </View>
+                    );
+                  })}
+                  {displayTags.map((t: any) => {
+                    const chipColors = getGenreChipColors(t.title || t);
+                    return (
+                      <View key={t.id || t.title} style={[styles.metaChip, {
+                        backgroundColor: chipColors.gradientEnd,
+                        borderColor: chipColors.borderColor,
+                      }]}>
+                        <Text style={[styles.metaChipText, { color: chipColors.textColor }]}>{t.title || t}</Text>
+                      </View>
+                    );
+                  })}
                 </ScrollView>
               )}
 
               {/* Description */}
               {displaySummary ? (
                 <TouchableOpacity onPress={() => setDescExpanded(v => !v)} activeOpacity={0.8}>
-                  <Text style={styles.desc} numberOfLines={descExpanded ? undefined : 4}>{displaySummary}</Text>
+                  <MarkdownText
+                    content={displaySummary}
+                    numberOfLines={descExpanded ? undefined : 4}
+                    style={styles.desc}
+                  />
                   <Text style={styles.descToggle}>{descExpanded ? 'Show less' : 'Read more'}</Text>
                 </TouchableOpacity>
               ) : (
@@ -797,7 +820,7 @@ function ABSCoverPickerModal({ visible, itemId, title, onClose, onSaved }: any) 
     setError('');
     try {
       const olUrl = `https://openlibrary.org/search.json?title=${encodeURIComponent(q)}&limit=12&fields=title,cover_i`;
-      const res = await fetch(`/proxy?url=${encodeURIComponent(olUrl)}`);
+      const res = await fetch(proxyUrl(olUrl));
       if (!res.ok) throw new Error(`Search failed: ${res.status}`);
       const json = await res.json();
       const results = (json.docs ?? [])
@@ -867,7 +890,7 @@ function ABSCoverPickerModal({ visible, itemId, title, onClose, onSaved }: any) 
 
             <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', padding: Spacing.base, gap: Spacing.base }}>
               {searchResults.map(r => {
-                const thumbUrl = `/proxy?url=${encodeURIComponent(`https://covers.openlibrary.org/b/id/${r.coverId}-M.jpg`)}`;
+                const thumbUrl = proxyUrl(`https://covers.openlibrary.org/b/id/${r.coverId}-M.jpg`);
                 const fullUrl = `https://covers.openlibrary.org/b/id/${r.coverId}-M.jpg`;
                 return (
                   <TouchableOpacity 
@@ -987,7 +1010,7 @@ function ABSMetadataSearchModal({ visible, itemId, initialTitle, onClose, onAppl
   async function searchGoogle(q: string): Promise<{ results: ABSMetaResult[]; warning?: string }> {
     const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8&printType=books`;
     try {
-      const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+      const res = await fetch(proxyUrl(url));
       if (!res.ok) {
         const msg = res.status === 429 ? 'rate-limited' : `returned error ${res.status}`;
         return { results: [], warning: `Google Books ${msg}.` };
@@ -1005,7 +1028,7 @@ function ABSMetadataSearchModal({ visible, itemId, initialTitle, onClose, onAppl
           description: v.description,
           genres: (v.categories ?? []).flatMap((c: string) => c.split('/')).map((s: string) => s.trim()).filter(Boolean),
           publisher: v.publisher,
-          coverUrl: thumbHttps ? `/proxy?url=${encodeURIComponent(thumbHttps)}` : undefined,
+          coverUrl: thumbHttps ? proxyUrl(thumbHttps) : undefined,
         };
       }),
     };
@@ -1189,7 +1212,7 @@ function ABSMetadataSearchModal({ visible, itemId, initialTitle, onClose, onAppl
 const makeStyles = (colors: ColorScheme, isWide = false) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
     paddingTop: 52,
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.xl,
@@ -1225,7 +1248,7 @@ const makeStyles = (colors: ColorScheme, isWide = false) => StyleSheet.create({
     width: isWide ? 220 : '100%',
     aspectRatio: 1,
     borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surface + '88',
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
@@ -1287,24 +1310,14 @@ const makeStyles = (colors: ColorScheme, isWide = false) => StyleSheet.create({
     padding: 4,
   },
   metaChip: {
-    backgroundColor: colors.surface,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     marginRight: Spacing.xs,
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  metaChipTag: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accent + '44',
   },
   metaChipText: {
     fontSize: Typography.xs,
-    color: colors.textSecondary,
-  },
-  metaChipTagText: {
-    color: colors.accent,
   },
   desc: {
     fontSize: Typography.sm,
@@ -1375,7 +1388,7 @@ const makeStyles = (colors: ColorScheme, isWide = false) => StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -5,30 +5,15 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  useWindowDimensions,
   Platform,
   GestureResponderEvent,
 } from 'react-native';
 import { LibraryItem } from '../services/LibraryProvider';
 import { LibraryFactory } from '../services/LibraryFactory';
-import { Colors, Typography, Spacing, Radius } from '../constants/theme';
+import { Typography, Spacing, Radius } from '../constants/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-
-const GAP = Spacing.sm;
-const SIDE_MARGIN = Spacing.base;
-
-export function useGridColumns() {
-  const { width } = useWindowDimensions();
-  const numColumns =
-    width >= 1600 ? 8 :
-    width >= 1280 ? 7 :
-    width >= 960  ? 6 :
-    width >= 700  ? 5 :
-    width >= 500  ? 4 : 3;
-  const cardWidth = (width - SIDE_MARGIN * 2 - GAP * (numColumns - 1)) / numColumns;
-  return { numColumns, cardWidth };
-}
+import { useGridColumns } from '../hooks/useGridColumns';
 
 interface Props {
   series: LibraryItem;
@@ -76,29 +61,38 @@ export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }:
   return (
     <TouchableOpacity
       ref={containerRef}
-      style={[cardWidth ? { width: cardWidth } : styles.cardFallback, style]}
+      style={[cardWidth ? { width: cardWidth } : styles.cardFallback, style, Platform.OS === 'web' && (styles as any).webHover]}
       onPress={onPress}
       onLongPress={onContextMenu ? handleLongPress : undefined}
       delayLongPress={400}
       activeOpacity={0.8}
+      {...(Platform.OS === 'web' ? { className: 'series-card-hover' } : {})}
     >
-      <View style={[styles.coverContainer, { backgroundColor: colors.surface }]}>
+      <View style={[styles.coverContainer, { backgroundColor: Platform.OS === 'web' ? colors.overlay : colors.surface, backdropFilter: Platform.OS === 'web' ? 'blur(8px)' : undefined } as any]}>
         <Image
           source={{ uri: coverUrl }}
           style={styles.cover}
           resizeMode="cover"
         />
-        <View style={styles.formatBadge}>
+        {/* Hover title overlay - web only */}
+        {Platform.OS === 'web' && (
+          <View style={styles.hoverOverlay} pointerEvents="none">
+            <View style={styles.titlePopup}>
+              <Text style={[styles.titlePopupText, { color: colors.textOnAccent }]} numberOfLines={2}>{series.title}</Text>
+            </View>
+          </View>
+        )}
+        <View style={[styles.formatBadge, { backgroundColor: colors.overlay }]}>
           <Text style={[styles.formatText, { color: colors.accent }]}>{(series as any).format ? getFormatIcon((series as any).format) : (series.mediaType === 'audiobook' ? 'AUDIO' : 'BOOK')}</Text>
         </View>
         {progress > 0 && progress < 100 && (
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: colors.overlay }]}>
             <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.accent }]} />
           </View>
         )}
         {progress >= 100 && (
           <View style={[styles.completedBadge, { backgroundColor: colors.success }]}>
-            <Text style={[styles.completedText, { color: '#fff' }]}>✓</Text>
+            <Text style={[styles.completedText, { color: colors.textOnAccent }]}>✓</Text>
           </View>
         )}
       </View>
@@ -189,38 +183,57 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     overflow: 'hidden',
     aspectRatio: 0.67,
-    backgroundColor: Colors.surface,
     marginBottom: Spacing.xs,
   },
   cover: { width: '100%', height: '100%' },
   formatBadge: {
     position: 'absolute', top: 5, left: 5,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: Radius.sm,
     paddingHorizontal: 5, paddingVertical: 2,
   },
   formatText: {
-    fontSize: 9, fontWeight: Typography.bold,
-    color: Colors.accent, letterSpacing: 0.5,
+    fontSize: 9, fontWeight: Typography.bold, letterSpacing: 0.5,
   },
   progressBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    height: 3, backgroundColor: 'rgba(0,0,0,0.5)',
+    height: 3,
   },
-  progressFill: { height: '100%', backgroundColor: Colors.accent },
+  progressFill: { height: '100%' },
   completedBadge: {
     position: 'absolute', top: 5, right: 5,
     width: 20, height: 20,
     borderRadius: Radius.full,
-    backgroundColor: Colors.success,
     justifyContent: 'center', alignItems: 'center',
   },
-  completedText: { fontSize: 10, color: '#fff', fontWeight: Typography.bold },
-  title: { fontSize: Typography.xs, color: Colors.textPrimary, lineHeight: 16 },
+  completedText: { fontSize: 10, fontWeight: Typography.bold },
+  title: { fontSize: Typography.xs, lineHeight: 16 },
+  // Hover overlay styles - web only
+  hoverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+    borderRadius: Radius.sm,
+  } as any,
+  titlePopup: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    width: '100%',
+  },
+  titlePopupText: {
+    fontSize: Typography.xs,
+    fontWeight: Typography.medium,
+    lineHeight: 15,
+  },
   // Large card
   cardLarge: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     overflow: 'hidden',
     marginBottom: Spacing.sm,
@@ -231,17 +244,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center', gap: 4,
   },
   titleLarge: {
-    fontSize: Typography.base, fontWeight: Typography.semibold, color: Colors.textPrimary,
+    fontSize: Typography.base, fontWeight: Typography.semibold,
   },
-  library: { fontSize: Typography.sm, color: Colors.accent },
+  library: { fontSize: Typography.sm },
   progressContainer: {
     flexDirection: 'row', alignItems: 'center',
     gap: Spacing.sm, marginTop: 4,
   },
   progressTrack: {
     flex: 1, height: 4,
-    backgroundColor: Colors.progressTrack,
     borderRadius: Radius.full, overflow: 'hidden',
   },
-  progressText: { fontSize: Typography.xs, color: Colors.textSecondary },
+  progressText: { fontSize: Typography.xs },
+  // Web hover effect - applied via className
+  webHover: {} as any,
 });

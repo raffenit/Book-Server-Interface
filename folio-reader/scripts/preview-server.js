@@ -32,7 +32,7 @@ let kavitaUrl = process.argv[2] || process.env.KAVITA_URL || getEnvKavitaUrl();
 
 if (!kavitaUrl) {
   console.log('\n  [!] Warning: No KAVITA_URL or EXPO_PUBLIC_KAVITA_URL set.');
-  console.log('      /api/* proxy will be disabled, but /proxy dynamic mode is available.');
+  console.log('      /api/* proxy will be disabled, but /dynamic-proxy mode is available.');
   kavitaUrl = 'http://localhost:8050'; // dummy default
 }
 
@@ -103,6 +103,10 @@ function proxyRequest(req, res) {
     }
 
     const transport = targetUrl.protocol === 'https:' ? https : http;
+    
+    console.log(`[proxyRequest] Forwarding to ${targetToUse}${req.url}`);
+    console.log(`[proxyRequest] Target: ${targetUrl.hostname}:${options.port}${options.path}`);
+    
     const proxyReq = transport.request(options, (proxyRes) => {
       const headers = { ...proxyRes.headers };
       // Inject CORS headers
@@ -259,11 +263,139 @@ function handleOpenLibraryProxy(req, res, targetUrl, redirectCount = 0) {
   });
 }
 
+// POST /abs-cover-proxy — fetch image server-side, upload to Audiobookshelf via multipart
+function handleABSCoverProxy(req, res) {
+  let body = '';
+  req.on('data', chunk => { body += chunk; });
+  req.on('end', async () => {
+    try {
+      const { itemId, imageUrl, absUrl, token } = JSON.parse(body);
+      console.log(`[abs-cover-proxy] itemId=${itemId} absUrl=${absUrl} imageUrl=${imageUrl?.substring(0, 80)}...`);
+
+      if (!absUrl) {
+        throw new Error('Missing absUrl parameter');
+      }
+
+      // Fetch the image as binary (or extract from data URL)
+      let imageBuffer;
+      let contentType = 'image/jpeg';
+      let extension = 'jpg';
+
+      if (imageUrl.startsWith('data:')) {
+        // Handle data URL (base64 encoded image)
+        const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) {
+          throw new Error('Invalid data URL format');
+        }
+        contentType = match[1] || 'image/jpeg';
+        // Extract extension from content type
+        const ctLower = contentType.toLowerCase();
+        if (ctLower.includes('webp')) extension = 'webp';
+        else if (ctLower.includes('png')) extension = 'png';
+        else if (ctLower.includes('gif')) extension = 'gif';
+        else if (ctLower.includes('bmp')) extension = 'bmp';
+        const base64Data = match[2];
+        imageBuffer = Buffer.from(base64Data, 'base64');
+        console.log(`[abs-cover-proxy] extracted from data URL: ${Math.round(imageBuffer.length / 1024)} KB, type: ${contentType}, ext: ${extension}`);
+      } else {
+        // Fetch HTTP(S) URL
+        imageBuffer = await fetchImageBuffer(imageUrl);
+        console.log(`[abs-cover-proxy] fetched image: ${Math.round(imageBuffer.length / 1024)} KB`);
+
+        // Detect content type from URL or default to jpeg
+        const urlLower = imageUrl.toLowerCase();
+        if (urlLower.endsWith('.webp')) { contentType = 'image/webp'; extension = 'webp'; }
+        else if (urlLower.endsWith('.png')) { contentType = 'image/png'; extension = 'png'; }
+        else if (urlLower.endsWith('.gif')) { contentType = 'image/gif'; extension = 'gif'; }
+        else if (urlLower.endsWith('.bmp')) { contentType = 'image/bmp'; extension = 'bmp'; }
+      }
+
+      // Build multipart/form-data payload
+      const boundary = '----FolioFormBoundary' + Math.random().toString(36).substring(2);
+      const preAmble = Buffer.from(
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="cover"; filename="cover.${extension}"\r\n` +
+        `Content-Type: ${contentType}\r\n\r\n`
+      );
+      const postAmble = Buffer.from(`\r\n--${boundary}--\r\n`);
+      const payload = Buffer.concat([preAmble, imageBuffer, postAmble]);
+
+      const absTarget = new URL(absUrl.replace(/\/$/, ''));
+      const options = {
+        hostname: absTarget.hostname,
+        port: Number(absTarget.port) || (absTarget.protocol === 'https:' ? 443 : 80),
+        path: `/api/items/${itemId}/cover?token=${token}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': payload.length,
+        },
+      };
+
+      const transport = absTarget.protocol === 'https:' ? https : http;
+      const proxyReq = transport.request(options, (proxyRes) => {
+        let respBody = '';
+        proxyRes.on('data', c => { respBody += c; });
+        proxyRes.on('end', () => {
+          console.log(`[abs-cover-proxy] ABS responded: ${proxyRes.statusCode} — ${respBody.substring(0, 200)}`);
+          const ok = proxyRes.statusCode >= 200 && proxyRes.statusCode < 300;
+          res.writeHead(ok ? 200 : proxyRes.statusCode, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: proxyRes.statusCode,
+            ok,
+            body: respBody,
+          }));
+        });
+      });
+
+      proxyReq.on('error', (err) => {
+        console.error('[abs-cover-proxy] request error:', err.message);
+        res.writeHead(502);
+        res.end(JSON.stringify({ error: err.message }));
+      });
+
+      proxyReq.write(payload);
+      proxyReq.end();
+    } catch (e) {
+      console.error('[abs-cover-proxy] exception:', e.message, e.stack);
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: e.message, stack: e.stack }));
+    }
+  });
+}
+
+// Helper to fetch image as binary buffer
+function fetchImageBuffer(imageUrl, redirectCount = 0) {
+  if (redirectCount > 5) return Promise.reject(new Error('Too many redirects'));
+  return new Promise((resolve, reject) => {
+    const mod = imageUrl.startsWith('https') ? https : http;
+    const req = mod.get(imageUrl, { headers: { 'User-Agent': 'Folio/1.0' } }, (res) => {
+      // Follow redirects
+      if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) && res.headers.location) {
+        res.resume();
+        resolve(fetchImageBuffer(res.headers.location, redirectCount + 1));
+        return;
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        res.resume();
+        reject(new Error(`Image fetch returned ${res.statusCode}`));
+        return;
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+  });
+}
+
 function dynamicProxy(req, res) {
   console.log(`[dynamic-proxy] Received request: ${req.url}`);
   const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
   let targetParam = parsedUrl.searchParams.get('url');
   console.log(`[dynamic-proxy] Extracted targetParam: ${targetParam}`);
+  console.log(`[dynamic-proxy] DEBUG: Fix is loaded - will merge extra params`);
   
   if (!targetParam) {
     console.log(`[dynamic-proxy] ERROR: Missing url parameter`);
@@ -276,6 +408,14 @@ function dynamicProxy(req, res) {
   if (!/^https?:\/\//i.test(targetParam)) targetParam = 'http://' + targetParam;
   const targetUrl = new URL(targetParam);
   
+  // Merge additional query params (like pageNum) from the proxy request into the target URL
+  for (const [key, value] of parsedUrl.searchParams) {
+    if (key !== 'url') {
+      targetUrl.searchParams.set(key, value);
+      console.log(`[dynamic-proxy] Merging param: ${key}=${value}`);
+    }
+  }
+  
   const options = {
     hostname: targetUrl.hostname,
     port: Number(targetUrl.port) || (targetUrl.protocol === 'https:' ? 443 : 80),
@@ -287,6 +427,11 @@ function dynamicProxy(req, res) {
   // Hardening: Set a real-looking User-Agent if not provided
   if (!options.headers['user-agent']) {
     options.headers['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Folio/1.0';
+  }
+  
+  // Add Accept header for image requests
+  if (targetUrl.pathname.includes('/Reader/image')) {
+    options.headers['accept'] = 'image/webp,image/apng,image/png,image/jpeg,*/*';
   }
 
   // Stop headers that interfere with proxying or trigger anti-bot protections
@@ -305,10 +450,13 @@ function dynamicProxy(req, res) {
   
   options.headers.host = targetUrl.host;
 
-  console.log(`[dynamic-proxy] ${req.method} ${targetParam}`);
+  const finalUrl = targetUrl.toString();
+  console.log(`[dynamic-proxy] ${req.method} ${finalUrl}`);
+  console.log(`[dynamic-proxy] Target path: ${targetUrl.pathname}${targetUrl.search}`);
 
   const transport = targetUrl.protocol === 'https:' ? https : http;
   const proxyReq = transport.request(options, (proxyRes) => {
+    console.log(`[dynamic-proxy] Response status: ${proxyRes.statusCode}`);
     // Forward the status code and headers, allowing CORS
     const headers = { ...proxyRes.headers };
     headers['Access-Control-Allow-Origin'] = '*';
@@ -341,12 +489,15 @@ const server = http.createServer((req, res) => {
   const urlPath = req.url.split('?')[0];
   console.log(`[server] ${req.method} ${req.url} -> urlPath: ${urlPath}`);
 
-  if (urlPath === '/proxy' || urlPath.startsWith('/proxy?')) {
+  if (urlPath === '/proxy' || urlPath.startsWith('/proxy?') || urlPath === '/dynamic-proxy' || urlPath.startsWith('/dynamic-proxy?')) {
     console.log('[server] Routing to dynamicProxy');
     dynamicProxy(req, res);
   } else if (req.url === '/cover-proxy' && req.method === 'POST') {
     console.log('[server] Routing to cover-proxy');
     handleCoverProxy(req, res);
+  } else if (req.url === '/abs-cover-proxy' && req.method === 'POST') {
+    console.log('[server] Routing to abs-cover-proxy');
+    handleABSCoverProxy(req, res);
   } else if (req.url.startsWith('/openlibrary-proxy')) {
     console.log('[server] Routing to openlibrary-proxy');
     handleOpenLibraryProxy(req, res, null);
@@ -366,7 +517,7 @@ function startServer(port) {
     console.log(`  -------------------------------------------`);
     console.log(`  Preview:  http://localhost:${port}`);
     console.log(`  Default:  /api/* → ${kavitaUrl}`);
-    console.log(`  Dynamic:  /proxy?url=<any-url>\n`);
+    console.log(`  Dynamic:  /proxy?url=<any-url> or /dynamic-proxy?url=<any-url>\n`);
   }).on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.log(`  [!] Port ${port} is in use, trying ${port + 1}...`);

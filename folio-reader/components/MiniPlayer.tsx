@@ -45,8 +45,8 @@ export function MiniPlayer() {
     <View style={{
       position: 'absolute', left: 0, right: 0,
       bottom: bottomOffset,
-      backgroundColor: colors.surfaceElevated + 'E6',
-      borderTopWidth: 1, borderTopColor: colors.border,
+      backgroundColor: 'rgba(10, 12, 25, 0.95)',
+      borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.08)',
       shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: -4 },
       shadowOpacity: 0.3, shadowRadius: 8, elevation: 12,
       backdropFilter: 'blur(10px)',

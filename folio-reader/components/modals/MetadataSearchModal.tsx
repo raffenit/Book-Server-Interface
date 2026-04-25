@@ -57,7 +57,10 @@ export function MetadataSearchModal({
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const provider = LibraryFactory.getProvider(providerType);
-  const searchProviders = SearchFactory.getAllProviders();
+  // Use audiobook-specific providers for ABS, all providers for Kavita
+  const searchProviders = providerType === 'abs'
+    ? SearchFactory.getAudiobookProviders()
+    : SearchFactory.getAllProviders();
 
   useEffect(() => {
     if (!visible) return;
