@@ -59,6 +59,7 @@ export const STORAGE_KEYS = {
     JWT_TOKEN: 'folio_abs_jwt_token',
     PROGRESS_TRACKING: 'folio_abs_progress_tracking',
     CONTINUE_LISTENING_CACHE: 'folio_abs_continue_listening_cache',
+    AUTO_PLAY: 'folio_abs_auto_play',
   },
   GOOGLE_BOOKS: {
     API_KEY: 'folio_google_books_api_key',
@@ -234,6 +235,15 @@ export const credentials = {
     
     async setProgressTracking(enabled: boolean): Promise<void> {
       await storage.setItem(STORAGE_KEYS.ABS.PROGRESS_TRACKING, String(enabled));
+    },
+    
+    async isAutoPlayEnabled(): Promise<boolean> {
+      const stored = await storage.getItem(STORAGE_KEYS.ABS.AUTO_PLAY);
+      return stored !== 'false'; // Default to true
+    },
+    
+    async setAutoPlay(enabled: boolean): Promise<void> {
+      await storage.setItem(STORAGE_KEYS.ABS.AUTO_PLAY, String(enabled));
     },
     
     async clearAll(): Promise<void> {

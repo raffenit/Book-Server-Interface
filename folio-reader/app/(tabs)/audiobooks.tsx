@@ -64,6 +64,7 @@ export default function AudiobooksScreen() {
   const [collectionItems, setCollectionItems] = useState<Set<string>>(new Set());
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activeFilterTab, setActiveFilterTab] = useState<'library' | 'genre' | 'author' | 'tag' | 'collection'>('library');
+  const [showContinueListening, setShowContinueListening] = useState(true);
 
   // Chip context menu state
   const [chipMenu, setChipMenu] = useState<{
@@ -274,6 +275,8 @@ export default function AudiobooksScreen() {
   useFocusEffect(
     useCallback(() => {
       initialize();
+      // Refresh the continue listening setting in case it changed
+      setShowContinueListening(absAPI.isProgressTrackingEnabled());
     }, [initialize])
   );
 
@@ -441,21 +444,19 @@ export default function AudiobooksScreen() {
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.accent} style={{ padding: Spacing.xl }} /> : null}
           ListHeaderComponent={
             <View>
-              {(() => {
-                console.log('[ContinueSection] Rendering with items:', continueListening.length, continueListening.map(i => ({ id: i.id, title: i.title?.substring(0, 20), progress: i.progress })));
-                return null;
-              })()}
-              <ContinueSection
-                title="Continue Listening"
-                items={continueListening.map((item): ContinueItem => ({
-                  id: item.id,
-                  title: item.title,
-                  subtitle: item.author,
-                  coverUrl: (LibraryFactory.getProvider('abs') as any).getCoverUrl?.(item.id) || '',
-                  progress: item.progress ? item.progress * 100 : 0,
-                }))}
-                onPressItem={(item) => router.push(`/audiobook/${item.id}`)}
-              />
+              {showContinueListening && (
+                <ContinueSection
+                  title="Continue Listening"
+                  items={continueListening.map((item): ContinueItem => ({
+                    id: item.id,
+                    title: item.title,
+                    subtitle: item.author,
+                    coverUrl: (LibraryFactory.getProvider('abs') as any).getCoverUrl?.(item.id) || '',
+                    progress: item.progress ? item.progress * 100 : 0,
+                  }))}
+                  onPressItem={(item) => router.push(`/audiobook/${item.id}`)}
+                />
+              )}
             </View>
           }
           ListEmptyComponent={

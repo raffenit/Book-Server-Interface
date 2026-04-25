@@ -5,6 +5,7 @@ import { LibraryFactory } from '../services/LibraryFactory';
 import { LibraryItem } from '../services/LibraryProvider';
 import { useTheme } from '../contexts/ThemeContext';
 import { Typography, Spacing, Radius } from '../constants/theme';
+import { StyleSheet } from 'react-native';
 
 interface AudiobookCardProps {
   item: LibraryItem;
@@ -57,8 +58,16 @@ export function AudiobookCard({ item, onPress, onPlay, isPlaying, cardWidth, onC
       activeOpacity={0.85}
       {...(Platform.OS === 'web' ? { className: 'audiobook-card-hover' } : {})}
     >
-      <View style={{ aspectRatio: 1, width: '100%' }}>
+      <View style={{ aspectRatio: 1, width: '100%', overflow: 'hidden' }}>
         <Image source={{ uri: coverUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+        {/* Hover title overlay - web only */}
+        {Platform.OS === 'web' && (
+          <View style={styles.hoverOverlay} pointerEvents="none">
+            <View style={styles.titlePopup}>
+              <Text style={[styles.titlePopupText, { color: colors.textOnAccent }]} numberOfLines={2}>{item.title}</Text>
+            </View>
+          </View>
+        )}
         {/* progress bar */}
         {progressPct > 0 && progressPct < 100 && (
           <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: colors.overlay }}>
@@ -101,3 +110,28 @@ export function AudiobookCard({ item, onPress, onPlay, isPlaying, cardWidth, onC
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  hoverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  } as any,
+  titlePopup: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    width: '100%',
+  },
+  titlePopupText: {
+    fontSize: Typography.xs,
+    fontWeight: Typography.medium,
+    lineHeight: 15,
+  },
+});

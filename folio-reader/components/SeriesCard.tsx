@@ -74,6 +74,14 @@ export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }:
           style={styles.cover}
           resizeMode="cover"
         />
+        {/* Hover title overlay - web only */}
+        {Platform.OS === 'web' && (
+          <View style={styles.hoverOverlay} pointerEvents="none">
+            <View style={styles.titlePopup}>
+              <Text style={[styles.titlePopupText, { color: colors.textOnAccent }]} numberOfLines={2}>{series.title}</Text>
+            </View>
+          </View>
+        )}
         <View style={[styles.formatBadge, { backgroundColor: colors.overlay }]}>
           <Text style={[styles.formatText, { color: colors.accent }]}>{(series as any).format ? getFormatIcon((series as any).format) : (series.mediaType === 'audiobook' ? 'AUDIO' : 'BOOK')}</Text>
         </View>
@@ -199,6 +207,30 @@ const styles = StyleSheet.create({
   },
   completedText: { fontSize: 10, fontWeight: Typography.bold },
   title: { fontSize: Typography.xs, lineHeight: 16 },
+  // Hover overlay styles - web only
+  hoverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+    borderRadius: Radius.sm,
+  } as any,
+  titlePopup: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    width: '100%',
+  },
+  titlePopupText: {
+    fontSize: Typography.xs,
+    fontWeight: Typography.medium,
+    lineHeight: 15,
+  },
   // Large card
   cardLarge: {
     flexDirection: 'row',

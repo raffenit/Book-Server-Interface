@@ -19,6 +19,7 @@ import { MetadataSearchModal } from '@/components/modals/MetadataSearchModal';
 import { MarkdownText } from '@/components/MarkdownText';
 import { startReadingSession, endReadingSession } from '@/services/stats';
 import { proxyUrl } from '@/config/proxy';
+import { credentials } from '@/config/credentials';
 
 import Slider from '@react-native-community/slider';
 
@@ -224,9 +225,13 @@ export default function AudiobookPlayerScreen() {
     try {
       const data = await provider.getSeriesDetail(id);
       setItem(data);
-      // Play the first item in the series (for ABS detail, this is the item itself mapped as a series)
-      const absItem = await absAPI.getLibraryItem(String(id));
-      await play(absItem);
+      // Check auto-play setting before playing
+      const autoPlay = await credentials.abs.isAutoPlayEnabled();
+      if (autoPlay) {
+        // Play the first item in the series (for ABS detail, this is the item itself mapped as a series)
+        const absItem = await absAPI.getLibraryItem(String(id));
+        await play(absItem);
+      }
     } catch (e: any) {
       console.error('[AudiobookPlayer] failed:', e);
       setLoadError(e?.message || 'Failed to load audiobook');

@@ -568,6 +568,7 @@ export default function EbooksScreen() {
   const [selectedLibraryId, setSelectedLibraryId] = useState<number | null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activeFilterTab, setActiveFilterTab] = useState<'library' | 'genre' | 'author' | 'tag' | 'collection'>('library');
+  const [showContinueReading, setShowContinueReading] = useState(true);
 
   const filterKey = `${selectedGenreId}|${selectedTagId}|${selectedCollectionId}|${selectedAuthorId}|${selectedLibraryId}`;
   const prevFilterKey = useRef(filterKey);
@@ -715,6 +716,8 @@ export default function EbooksScreen() {
     useCallback(() => {
       if (!kavitaAPI.hasCredentials()) return;
       fetchMetadata(false); // false = use cache if available
+      // Refresh the continue reading setting in case it changed
+      setShowContinueReading(kavitaAPI.isProgressTrackingEnabled());
     }, [fetchMetadata])
   );
 
@@ -925,18 +928,20 @@ export default function EbooksScreen() {
         onEndReachedThreshold={0.3}
         ListHeaderComponent={
           <View>
-            <ContinueSection
-              title="Continue Reading"
-              items={recentSeries.map((s: any): ContinueItem => ({
-                id: s.seriesId || s.id,
-                title: s.localizedName || s.name,
-                subtitle: s.libraryName,
-                coverUrl: kavitaAPI.getSeriesCoverUrl(s.seriesId || s.id),
-                progress: s.pages > 0 ? (s.pagesRead / s.pages) * 100 : 0,
-              }))}
-              onPressItem={(item) => router.push(`/series/${item.id}`)}
-              onContextMenu={(item, x, y) => openMenu(Number(item.id), item.title, x, y)}
-            />
+            {showContinueReading && (
+              <ContinueSection
+                title="Continue Reading"
+                items={recentSeries.map((s: any): ContinueItem => ({
+                  id: s.seriesId || s.id,
+                  title: s.localizedName || s.name,
+                  subtitle: s.libraryName,
+                  coverUrl: kavitaAPI.getSeriesCoverUrl(s.seriesId || s.id),
+                  progress: s.pages > 0 ? (s.pagesRead / s.pages) * 100 : 0,
+                }))}
+                onPressItem={(item) => router.push(`/series/${item.id}`)}
+                onContextMenu={(item, x, y) => openMenu(Number(item.id), item.title, x, y)}
+              />
+            )}
             {seriesLoading && recentSeries.length > 0 && <ActivityIndicator color={colors.accent} />}
           </View>
         }

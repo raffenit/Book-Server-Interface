@@ -17,6 +17,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useProfile, Profile } from '../../contexts/ProfileContext';
 import { kavitaAPI } from '../../services/kavitaAPI';
 import { absAPI } from '../../services/audiobookshelfAPI';
+import { credentials } from '../../config/credentials';
 import { Typography, Spacing, Radius, themes, themeLabels, themeModeLabels, fontLabels, fontPreviewFamily, selfHostedFonts, type ThemeName, type ThemeMode, type FontName, type ColorScheme } from '../../constants/theme';
 import { STORAGE_KEYS } from '../../constants/config';
 import { storage } from '../../services/storage';
@@ -995,12 +996,15 @@ export default function SettingsScreen() {
   const [gbHasKey, setGbHasKey] = useState(false);
   const [kavitaProgressTracking, setKavitaProgressTracking] = useState(true);
   const [absProgressTracking, setAbsProgressTracking] = useState(true);
+  const [absAutoPlay, setAbsAutoPlay] = useState(true);
 
   useEffect(() => {
     storage.getItem(STORAGE_KEYS.GOOGLE_BOOKS_API_KEY).then(val => setGbHasKey(!!val));
     // Load progress tracking preferences
     setKavitaProgressTracking(kavitaAPI.isProgressTrackingEnabled());
     setAbsProgressTracking(absAPI.getProgressTrackingEnabled());
+    // Load auto-play preference
+    credentials.abs.isAutoPlayEnabled().then(setAbsAutoPlay);
   }, []);
 
   async function toggleKavitaProgressTracking(value: boolean) {
@@ -1011,6 +1015,11 @@ export default function SettingsScreen() {
   async function toggleAbsProgressTracking(value: boolean) {
     await absAPI.setProgressTrackingEnabled(value);
     setAbsProgressTracking(value);
+  }
+
+  async function toggleAbsAutoPlay(value: boolean) {
+    await credentials.abs.setAutoPlay(value);
+    setAbsAutoPlay(value);
   }
 
   async function handleScanAll() {
@@ -1122,7 +1131,7 @@ export default function SettingsScreen() {
                 </View>
               )}
               {absConnected && (
-                <View style={{ padding: Spacing.md, backgroundColor: colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border }}>
+                <View style={{ padding: Spacing.md, backgroundColor: colors.surface, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border, gap: Spacing.md }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: Typography.base, fontWeight: Typography.semibold, color: colors.textPrimary }}>ABS: Continue Listening</Text>
@@ -1133,6 +1142,18 @@ export default function SettingsScreen() {
                       onValueChange={toggleAbsProgressTracking}
                       trackColor={{ false: colors.border, true: colors.accent + '80' }}
                       thumbColor={absProgressTracking ? colors.accent : colors.textMuted}
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: Typography.base, fontWeight: Typography.semibold, color: colors.textPrimary }}>ABS: Auto-play on Open</Text>
+                      <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 2 }}>Automatically start playing when opening audiobook</Text>
+                    </View>
+                    <Switch
+                      value={absAutoPlay}
+                      onValueChange={toggleAbsAutoPlay}
+                      trackColor={{ false: colors.border, true: colors.accent + '80' }}
+                      thumbColor={absAutoPlay ? colors.accent : colors.textMuted}
                     />
                   </View>
                 </View>
