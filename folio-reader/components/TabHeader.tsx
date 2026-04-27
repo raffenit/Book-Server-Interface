@@ -14,9 +14,11 @@ interface TabHeaderProps {
   libraries?: { id: string | number; name: string }[];
   selectedLibraryId?: string | number | null;
   onSelectLibrary?: (id: string | number) => void;
+  isSelectionMode?: boolean;
+  onToggleSelection?: () => void;
 }
 
-export default function TabHeader({ title, count, countLabel, hasMore, serverName, libraries, selectedLibraryId, onSelectLibrary }: TabHeaderProps) {
+export default function TabHeader({ title, count, countLabel, hasMore, serverName, libraries, selectedLibraryId, onSelectLibrary, isSelectionMode, onToggleSelection }: TabHeaderProps) {
   const router = useRouter();
   const { colors } = useTheme();
 
@@ -78,10 +80,40 @@ export default function TabHeader({ title, count, countLabel, hasMore, serverNam
           )}
         </View>
 
-        {/* Right: Server indicator + settings */}
+        {/* Right: Server indicator + select + settings */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
           {serverName && (
             <Text style={{ fontSize: Typography.xs, color: colors.textMuted }}>{serverName}</Text>
+          )}
+          {onToggleSelection && (
+            <TouchableOpacity
+              onPress={onToggleSelection}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: Spacing.md,
+                paddingVertical: Spacing.xs,
+                borderRadius: Radius.md,
+                backgroundColor: isSelectionMode ? colors.accentSoft : colors.surface,
+                borderWidth: 1,
+                borderColor: isSelectionMode ? colors.accent : colors.border,
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name={isSelectionMode ? 'close-outline' : 'checkmark-circle-outline'}
+                size={16}
+                color={isSelectionMode ? colors.accent : colors.textSecondary}
+              />
+              <Text style={{
+                fontSize: Typography.sm,
+                fontWeight: Typography.medium,
+                color: isSelectionMode ? colors.accent : colors.textSecondary,
+              }}>
+                {isSelectionMode ? 'Done' : 'Select'}
+              </Text>
+            </TouchableOpacity>
           )}
           <TouchableOpacity
             onPress={() => router.push('/(tabs)/settings')}

@@ -53,6 +53,7 @@ export interface LibrarySeriesDetail {
   authorName?: string;
   narratorName?: string;
   mediaType: LibraryMediaType;
+  libraryId?: number | string;
   volumes: LibraryVolume[];
   genres: LibraryGenre[];
   tags: LibraryTag[];

@@ -87,6 +87,7 @@ export interface SeriesDetail {
   sortName?: string;
   summary?: string;
   coverImage?: string;
+  libraryId: number;
   volumes: Volume[];
 }
 

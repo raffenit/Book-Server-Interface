@@ -201,6 +201,7 @@ export default function SeriesDetailScreen() {
       chapterId: chapter.id,
       volumeId: volume.id,
       seriesId: id,
+      libraryId: detail?.libraryId,
       title: displayName,
     };
 

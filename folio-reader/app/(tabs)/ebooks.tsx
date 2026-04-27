@@ -23,6 +23,7 @@ import { SeriesCard } from '../../components/SeriesCard';
 import { useGridColumns } from '../../hooks/useGridColumns';
 import SeriesContextMenu from '../../components/SeriesContextMenu';
 import GenreTagContextMenu, { ChipType } from '../../components/GenreTagContextMenu';
+import BulkEditModal from '../../components/BulkEditModal';
 import { useSeriesContextMenu } from '../../hooks/useSeriesContextMenu';
 import { Typography, Spacing, Radius } from '../../constants/theme';
 import { storage } from '../../services/storage';
@@ -570,6 +571,11 @@ export default function EbooksScreen() {
   const [activeFilterTab, setActiveFilterTab] = useState<'library' | 'genre' | 'author' | 'tag' | 'collection'>('library');
   const [showContinueReading, setShowContinueReading] = useState(true);
 
+  // Multi-select state for bulk editing
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+
   const filterKey = `${selectedGenreId}|${selectedTagId}|${selectedCollectionId}|${selectedAuthorId}|${selectedLibraryId}`;
   const prevFilterKey = useRef(filterKey);
   const flatListRef = useRef<FlatList<Series> | null>(null);
@@ -578,11 +584,32 @@ export default function EbooksScreen() {
   // Cache for metadata to avoid redundant fetches
   const metadataCacheRef = useRef<{
     libraryId: number | null;
+    libraries: any[];
     genres: Genre[];
     tags: Tag[];
     collections: Collection[];
     timestamp: number;
   } | null>(null);
+
+  // Load persistent cache on mount
+  useEffect(() => {
+    const loadPersistentCache = async () => {
+      try {
+        const cached = await storage.getItem(STORAGE_KEYS.KAVITA.METADATA_CACHE);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && Date.now() - parsed.timestamp < 30 * 60 * 1000) { // 30 min TTL
+            metadataCacheRef.current = parsed;
+            if (parsed.libraries?.length > 0) setLibraries(parsed.libraries);
+            if (parsed.genres?.length > 0) setGenres(parsed.genres);
+            if (parsed.tags?.length > 0) setTags(parsed.tags);
+            if (parsed.collections?.length > 0) setCollections(parsed.collections);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    loadPersistentCache();
+  }, []);
 
   // Helper to filter items in parallel batches (much faster than sequential)
   const filterWithSeries = async <T extends { id: number }>(
@@ -662,14 +689,18 @@ export default function EbooksScreen() {
       }
     } catch {}
     
-    // Update cache
-    metadataCacheRef.current = {
+    // Update cache (use current libraries from state)
+    const newCache = {
       libraryId: selectedLibraryId,
+      libraries: libraries.length > 0 ? libraries : [],
       genres: fetchedGenres,
       tags: fetchedTags,
       collections: fetchedCollections,
       timestamp: now,
     };
+    metadataCacheRef.current = newCache;
+    // Persist cache
+    storage.setItem(STORAGE_KEYS.KAVITA.METADATA_CACHE, JSON.stringify(newCache)).catch(() => {});
     // Load cached continue reading data first (instant)
     storage.getItem(STORAGE_KEYS.KAVITA.ON_DECK_CACHE)
       .then((cached: string | null) => {
@@ -760,7 +791,7 @@ export default function EbooksScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedGenreId, selectedTagId, selectedLibraryId]);
+  }, [selectedGenreId, selectedTagId, selectedLibraryId, selectedCollectionId]);
 
   function selectLibrary(idRaw: string | number | null) {
     const id = idRaw === null ? null : Number(idRaw);
@@ -854,6 +885,45 @@ export default function EbooksScreen() {
     fetchSeries(page + 1, false);
   }
 
+  // Esc key handler to exit selection mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isSelectionMode) {
+        exitSelectionMode();
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isSelectionMode]);
+
+  // Multi-select handlers
+  const toggleSelection = (id: string | number) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(series.map(s => s.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    clearSelection();
+  };
+
   const hasActiveFilter = selectedGenreId !== null || selectedTagId !== null || selectedCollectionId !== null || selectedAuthorId !== null;
 
   if (authLoading || loading) {
@@ -884,7 +954,10 @@ export default function EbooksScreen() {
         libraries={libraries}
         selectedLibraryId={selectedLibraryId}
         onSelectLibrary={selectLibrary}
+        isSelectionMode={isSelectionMode}
+        onToggleSelection={() => isSelectionMode ? exitSelectionMode() : setIsSelectionMode(true)}
       />
+
       <FilterSection
         libraries={libraries}
         genres={genres}
@@ -981,15 +1054,116 @@ export default function EbooksScreen() {
           ) : null
         }
         renderItem={({ item }) => (
-          <SeriesCard
-            series={item}
-            onPress={() => router.push(`/series/${item.id}`)}
-            onContextMenu={openMenu}
-            cardWidth={cardWidth}
-          />
+          <View style={{ position: 'relative' }}>
+            <SeriesCard
+              series={item}
+              onPress={() => {
+                if (isSelectionMode) {
+                  toggleSelection(item.id);
+                } else {
+                  router.push(`/series/${item.id}`);
+                }
+              }}
+              onContextMenu={(id, name, x, y) => {
+                if (isSelectionMode) {
+                  // In selection mode, right-click opens bulk edit if items selected
+                  if (selectedIds.size > 0) {
+                    setShowBulkEditModal(true);
+                  }
+                } else {
+                  openMenu(id, name, x, y);
+                }
+              }}
+              cardWidth={cardWidth}
+            />
+            {isSelectionMode && (
+              <TouchableOpacity
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  zIndex: 10,
+                  padding: 4,
+                }}
+                onPress={() => toggleSelection(item.id)}
+                activeOpacity={0.8}
+              >
+                <View style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: selectedIds.has(item.id) ? colors.accent : colors.surface,
+                  borderWidth: 2,
+                  borderColor: selectedIds.has(item.id) ? colors.accent : colors.border,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}>
+                  {selectedIds.has(item.id) && (
+                    <Ionicons name="checkmark" size={16} color={colors.textOnAccent} />
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       />
       </View>
+
+      {/* Selection Toolbar */}
+      {isSelectionMode && (
+        <View style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          padding: Spacing.md,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          zIndex: 100,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: Typography.semibold }}>
+              {selectedIds.size} selected
+            </Text>
+            <TouchableOpacity onPress={selectAll}>
+              <Text style={{ color: colors.accent, fontSize: Typography.sm }}>Select All</Text>
+            </TouchableOpacity>
+            {selectedIds.size > 0 && (
+              <TouchableOpacity onPress={clearSelection}>
+                <Text style={{ color: colors.textMuted, fontSize: Typography.sm }}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+            {selectedIds.size > 0 && (
+              <TouchableOpacity
+                style={{
+                  paddingHorizontal: Spacing.lg,
+                  paddingVertical: Spacing.sm,
+                  borderRadius: Radius.md,
+                  backgroundColor: colors.accent,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={() => setShowBulkEditModal(true)}
+              >
+                <Ionicons name="pencil" size={16} color={colors.textOnAccent} />
+                <Text style={{ color: colors.textOnAccent, fontWeight: Typography.semibold }}>
+                  Edit {selectedIds.size} Series
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* Add padding at bottom when selection mode is active */}
+      {isSelectionMode && <View style={{ height: 80 }} />}
 
       <SeriesContextMenu
         visible={ctxMenu.visible}
@@ -998,6 +1172,21 @@ export default function EbooksScreen() {
         position={ctxMenu.position}
         onClose={closeMenu}
         onOpenDetail={openDetail}
+      />
+
+      <BulkEditModal
+        visible={showBulkEditModal}
+        seriesIds={Array.from(selectedIds)}
+        allGenres={genres}
+        allTags={tags}
+        allCollections={collections}
+        onClose={() => setShowBulkEditModal(false)}
+        onComplete={() => {
+          clearSelection();
+          exitSelectionMode();
+          fetchMetadata(true);
+          fetchSeries(0, true);
+        }}
       />
 
       <GenreTagContextMenu

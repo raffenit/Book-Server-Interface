@@ -50,6 +50,7 @@ export const STORAGE_KEYS = {
     JWT_TOKEN: 'folio_kavita_jwt_token',
     PROGRESS_TRACKING: 'folio_kavita_progress_tracking',
     ON_DECK_CACHE: 'folio_kavita_on_deck_cache',
+    METADATA_CACHE: 'folio_kavita_metadata_cache',
   },
   ABS: {
     SERVER_URL: 'folio_abs_server_url',
