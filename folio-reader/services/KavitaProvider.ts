@@ -88,14 +88,14 @@ export class KavitaProvider implements LibraryProvider {
       libraryId: detail.libraryId,
       genres: (meta?.genres || []).map(g => ({ id: g.id, title: g.title })),
       tags: (meta?.tags || []).map(t => ({ id: t.id, title: t.title })),
-      volumes: (detail.volumes || []).map(v => ({
+      volumes: (Array.isArray(detail.volumes) ? detail.volumes : []).map(v => ({
         id: v.id,
         number: v.number,
         name: v.name,
         pages: v.pages,
         pagesRead: v.pagesRead,
         coverImage: v.coverImage,
-        chapters: (v.chapters || []).map(c => ({
+        chapters: (Array.isArray(v.chapters) ? v.chapters : []).map(c => ({
           id: c.id,
           number: c.number,
           title: c.title,
