@@ -731,9 +731,25 @@ class KavitaAPI {
   async uploadSeriesCover(seriesId: number, base64DataUrl: string): Promise<void> {
     // Send full data URL — Kavita's /api/Upload/series endpoint accepts data URLs
     const url = base64DataUrl;
+    
+    // Debug: log image format and size
+    const format = base64DataUrl.match(/^data:image\/(\w+);/)?.[1] || 'unknown';
+    const sizeKB = Math.round(base64DataUrl.length / 1024);
+    console.log(`[KavitaAPI] Uploading cover for series ${seriesId}: format=${format}, size=${sizeKB}KB`);
+    
     try {
-      await this.client.post('/api/Upload/series', { id: seriesId, url });
+      console.log(`[KavitaAPI] POST /api/Upload/series with JWT: ${this.jwtToken ? 'present' : 'missing'}`);
+      const response = await this.client.post('/api/Upload/series', { id: seriesId, url });
+      console.log(`[KavitaAPI] Cover upload response: ${response.status}`, response.data);
     } catch (e: any) {
+      console.error(`[KavitaAPI] Cover upload error:`, {
+        status: e?.response?.status,
+        statusText: e?.response?.statusText,
+        data: e?.response?.data,
+        message: e?.message,
+        url: e?.config?.url,
+        hasJwt: !!this.jwtToken
+      });
       const kavitaMsg = e?.response?.data?.title ?? e?.response?.data ?? e?.message ?? 'Unknown error';
       throw new Error(`Cover upload failed: ${kavitaMsg}`);
     }
