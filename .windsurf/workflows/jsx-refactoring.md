@@ -226,18 +226,64 @@ If you encounter a syntax error:
 
 Run these after any significant JSX changes:
 
+### Standard Validation (Fast)
 ```bash
-# Quick syntax check
+# TypeScript syntax check
 npx tsc --noEmit
 
-# Full build (catches runtime JSX issues)
+# Quick structural check
+npm run validate:jsx
+```
+
+### Advanced JSX Validation (When Build Fails Silently)
+
+**Use this when:**
+- Build fails with "Unterminated JSX contents"
+- You get "Unexpected token" errors at the end of a file
+- Standard validation passes but build still fails
+- You've made large JSX structure changes (500+ lines affected)
+- You suspect missing closing tags in nested components
+
+```bash
+# Advanced validation - checks tag balance and mismatched pairs
+npm run validate:jsx-advanced
+```
+
+**This catches:**
+- Unclosed `<View>` tags (most common culprit)
+- Missing `</View>` after long FlatList/ScrollView blocks
+- Mismatched opening/closing tags
+- Tag count imbalances
+
+### Full Build (Final Verification)
+```bash
+# Full build catches runtime JSX issues
 npm run build:pwa
 
 # If build fails, check for:
 # - "Adjacent JSX elements" → Add fragment wrapper
-# - "Unexpected token" → Check for mismatched braces
-# - "has no corresponding closing tag" → Find the orphan
+# - "Unexpected token" → Check for mismatched braces  
+# - "has no corresponding closing tag" → Run validate:jsx-advanced
+# - "Unterminated JSX contents" → Missing closing tag before file end
 ```
+
+### Validation Decision Tree
+
+```
+Making JSX edits?
+│
+├── Small change (<10 lines)?
+│   └── Just run build
+│
+├── Medium change (10-100 lines)?
+│   └── Run validate:jsx → build
+│
+└── Large change (100+ lines or deep nesting)?
+    ├── Run validate:jsx-advanced FIRST
+    ├── Make your edits
+    └── Run validate:jsx-advanced again → build
+```
+
 // turbo
 
 ## Example: Centralizing Filter Components

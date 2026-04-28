@@ -14,6 +14,7 @@
     "test:profile": "jest __tests__/profile.test.ts",
     "validate:types": "tsc --noEmit --jsx react-native",
     "validate:jsx": "node scripts/validate-jsx.js",
+    "validate:jsx-advanced": "node scripts/validate-jsx-advanced.js",
     "structure:generate": "grep -rn \"^export function\\|^export const.*=.*(\" app/ components/ hooks/ services/ contexts/ constants/ --include=\"*.tsx\" --include=\"*.ts\" | sort > STRUCTURE_AUTO.md"
   },
   "dependencies": {

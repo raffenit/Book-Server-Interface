@@ -85,6 +85,7 @@ export class KavitaProvider implements LibraryProvider {
       coverImage: detail.coverImage,
       authorName: meta?.writers?.map(w => w.name).join(', ') || '',
       mediaType: 'book',
+      libraryId: detail.libraryId,
       genres: (meta?.genres || []).map(g => ({ id: g.id, title: g.title })),
       tags: (meta?.tags || []).map(t => ({ id: t.id, title: t.title })),
       volumes: (detail.volumes || []).map(v => ({

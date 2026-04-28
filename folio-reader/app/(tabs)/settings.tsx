@@ -89,6 +89,8 @@ function KavitaConfigModal({ visible, onClose, onSuccess }: { visible: boolean; 
   const { colors } = useTheme();
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState('');
   const [statusOk, setStatusOk] = useState(false);
@@ -100,6 +102,8 @@ function KavitaConfigModal({ visible, onClose, onSuccess }: { visible: boolean; 
     if (visible) {
       setUrl(kavitaAPI.getServerUrl());
       setKey(kavitaAPI.getApiKey() || '');
+      setUsername('');
+      setPassword('');
       setStatus('');
       setDiscoveredServers([]);
       setManualMode(false);
@@ -143,8 +147,8 @@ function KavitaConfigModal({ visible, onClose, onSuccess }: { visible: boolean; 
   }
 
   async function handleSave() {
-    if (!url.trim() || !key.trim()) {
-      setStatus('Server URL and API key are required.');
+    if (!url.trim() || !username.trim() || !password.trim()) {
+      setStatus('Server URL, username, and password are required.');
       setStatusOk(false);
       return;
     }
@@ -152,7 +156,7 @@ function KavitaConfigModal({ visible, onClose, onSuccess }: { visible: boolean; 
     setStatus('Testing connection...');
     try {
       console.log('[KavitaModal] Starting save and test...');
-      await kavitaAPI.saveCredentials(url.trim(), key.trim());
+      await kavitaAPI.saveCredentials(url.trim(), username.trim(), password.trim(), key.trim() || undefined);
       console.log('[KavitaModal] Credentials saved, attempting login...');
       
       // Authenticate to get JWT token (or validate API key for older Kavita versions)
@@ -288,18 +292,43 @@ function KavitaConfigModal({ visible, onClose, onSuccess }: { visible: boolean; 
           </>
         )}
         <View style={{ marginBottom: Spacing.lg }}>
-          <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>API Key</Text>
+          <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Username</Text>
           <TextInput
             style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
-            value={key}
-            onChangeText={setKey}
-            placeholder="Your Kavita API key"
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Your Kavita username"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+        <View style={{ marginBottom: Spacing.lg }}>
+          <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>Password</Text>
+          <TextInput
+            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Your Kavita password"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             secureTextEntry
           />
-          <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 4 }}>Found in Kavita → User Settings → Security</Text>
+        </View>
+        <View style={{ marginBottom: Spacing.lg }}>
+          <Text style={{ fontSize: Typography.sm, fontWeight: Typography.semibold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.xs }}>API Key (Optional)</Text>
+          <TextInput
+            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md, padding: Spacing.base, fontSize: Typography.base, color: colors.textPrimary }}
+            value={key}
+            onChangeText={setKey}
+            placeholder="Your Kavita API key (for older versions)"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          <Text style={{ fontSize: Typography.xs, color: colors.textMuted, marginTop: 4 }}>Found in Kavita → User Settings → Security (for legacy auth)</Text>
         </View>
         {status ? <Text style={{ fontSize: Typography.sm, marginBottom: Spacing.md, color: statusOk ? colors.success : colors.error }}>{status}</Text> : null}
         <TouchableOpacity
