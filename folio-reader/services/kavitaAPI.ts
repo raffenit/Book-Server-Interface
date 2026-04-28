@@ -755,23 +755,34 @@ class KavitaAPI {
   // ── Cover image URLs ─────────────────────────────────────────────────────────
 
   getSeriesCoverUrl(seriesId: number): string {
-    return `${this.serverUrl}/api/image/series-cover?seriesId=${seriesId}&apiKey=${this.apiKey}`;
+    // Use JWT token if available, otherwise fall back to API key
+    const token = this.jwtToken || this.apiKey;
+    const tokenParam = this.jwtToken ? `jwtToken=${encodeURIComponent(token)}` : `apiKey=${encodeURIComponent(token)}`;
+    return `${this.serverUrl}/api/image/series-cover?seriesId=${seriesId}&${tokenParam}`;
   }
 
   getChapterCoverUrl(chapterId: number): string {
-    return `${this.serverUrl}/api/image/chapter-cover?chapterId=${chapterId}&apiKey=${this.apiKey}`;
+    const token = this.jwtToken || this.apiKey;
+    const tokenParam = this.jwtToken ? `jwtToken=${encodeURIComponent(token)}` : `apiKey=${encodeURIComponent(token)}`;
+    return `${this.serverUrl}/api/image/chapter-cover?chapterId=${chapterId}&${tokenParam}`;
   }
 
   getVolumeCoverUrl(volumeId: number): string {
-    return `${this.serverUrl}/api/image/volume-cover?volumeId=${volumeId}&apiKey=${this.apiKey}`;
+    const token = this.jwtToken || this.apiKey;
+    const tokenParam = this.jwtToken ? `jwtToken=${encodeURIComponent(token)}` : `apiKey=${encodeURIComponent(token)}`;
+    return `${this.serverUrl}/api/image/volume-cover?volumeId=${volumeId}&${tokenParam}`;
   }
 
   getLibraryCoverUrl(libraryId: number): string {
-    return `${this.serverUrl}/api/image/library-cover?libraryId=${libraryId}&apiKey=${this.apiKey}`;
+    const token = this.jwtToken || this.apiKey;
+    const tokenParam = this.jwtToken ? `jwtToken=${encodeURIComponent(token)}` : `apiKey=${encodeURIComponent(token)}`;
+    return `${this.serverUrl}/api/image/library-cover?libraryId=${libraryId}&${tokenParam}`;
   }
 
   getCollectionCoverUrl(collectionId: number): string {
-    return `${this.serverUrl}/api/image/collection-cover?collectionTagId=${collectionId}&apiKey=${this.apiKey}`;
+    const token = this.jwtToken || this.apiKey;
+    const tokenParam = this.jwtToken ? `jwtToken=${encodeURIComponent(token)}` : `apiKey=${encodeURIComponent(token)}`;
+    return `${this.serverUrl}/api/image/collection-cover?collectionTagId=${collectionId}&${tokenParam}`;
   }
 
   // ── Reader URLs ──────────────────────────────────────────────────────────────
