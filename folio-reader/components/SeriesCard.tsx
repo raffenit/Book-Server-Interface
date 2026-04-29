@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -41,7 +41,8 @@ export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }:
   const seriesProvider = (series as any).provider || 'kavita';
 
   const provider = LibraryFactory.getProvider(seriesProvider);
-  const coverUrl = provider.getCoverUrl(series.id);
+  // Memoize coverUrl to prevent regeneration on every render (causes image reload flicker)
+  const coverUrl = useMemo(() => provider.getCoverUrl(series.id), [provider, series.id]);
   const containerRef = useRef<View>(null);
 
   // DEBUG: Log cover URL for troubleshooting
@@ -127,7 +128,8 @@ export function SeriesCardLarge({ series, onPress, onContextMenu }: Props) {
   const seriesTitle = (series as any).title || (series as any).name || 'Unknown';
 
   const provider = LibraryFactory.getProvider(series.provider || 'kavita');
-  const coverUrl = provider.getCoverUrl(realId);
+  // Memoize coverUrl to prevent regeneration on every render (causes image reload flicker)
+  const coverUrl = useMemo(() => provider.getCoverUrl(realId), [provider, realId]);
   const containerRef = useRef<View>(null);
 
   useEffect(() => {
