@@ -57,16 +57,27 @@ git-auto-pr() {
   echo "[4/5] Creating PR..."
   local pr_output=$(gh pr create --fill 2>&1)
   local pr_exit=$?
+  local pr_num=""
   
   if [ $pr_exit -ne 0 ]; then
-    echo "❌ PR creation failed: $pr_output"
-    return 1
+    # Check if PR already exists
+    if echo "$pr_output" | grep -qi "already exists"; then
+      echo "ℹ️  PR already exists, extracting PR number..."
+      pr_num=$(echo "$pr_output" | grep -oE '/pull/[0-9]+' | head -1 | cut -d'/' -f3)
+      if [ -z "$pr_num" ]; then
+        echo "❌ Could not extract PR number from: $pr_output"
+        return 1
+      fi
+      echo "✅ Using existing PR #$pr_num (your push already updated it)"
+    else
+      echo "❌ PR creation failed: $pr_output"
+      return 1
+    fi
+  else
+    echo "✅ PR created: $pr_output"
+    # Extract PR number from URL (e.g., https://github.com/owner/repo/pull/35 -> 35)
+    pr_num=$(echo "$pr_output" | grep -oE '/pull/[0-9]+$' | cut -d'/' -f3)
   fi
-  
-  echo "✅ PR created: $pr_output"
-  
-  # Extract PR number from URL (e.g., https://github.com/owner/repo/pull/35 -> 35)
-  local pr_num=$(echo "$pr_output" | grep -oE '/pull/[0-9]+$' | cut -d'/' -f3)
 
   echo "[5/5] Enabling auto-merge for PR #$pr_num..."
   local merge_output=$(gh pr merge --auto --squash 2>&1)
