@@ -55,17 +55,59 @@ git-auto-pr() {
   git push origin "$branch" || return 1
 
   echo "[4/5] Creating PR..."
-  local pr_url=$(gh pr create --fill 2>&1)
-  if [ $? -ne 0 ]; then
-    echo "PR creation failed: $pr_url"
+  local pr_output=$(gh pr create --fill 2>&1)
+  local pr_exit=$?
+  
+  if [ $pr_exit -ne 0 ]; then
+    echo "❌ PR creation failed: $pr_output"
     return 1
   fi
-  echo "PR created: $pr_url"
+  
+  echo "✅ PR created: $pr_output"
+  
+  # Extract PR number from URL (e.g., https://github.com/owner/repo/pull/35 -> 35)
+  local pr_num=$(echo "$pr_output" | grep -oE '/pull/[0-9]+$' | cut -d'/' -f3)
 
-  echo "[5/5] Enabling auto-merge..."
-  gh pr merge --auto --squash || echo "Auto-merge may require PR checks to pass first"
+  echo "[5/5] Enabling auto-merge for PR #$pr_num..."
+  local merge_output=$(gh pr merge --auto --squash 2>&1)
+  local merge_exit=$?
+  
+  if [ $merge_exit -ne 0 ]; then
+    echo "⚠️  Auto-merge setup failed: $merge_output"
+    echo "   This usually means:"
+    echo "   - Auto-merge is not enabled in repo settings"
+    echo "   - Branch protection requires checks that haven't passed"
+    echo "   - You don't have merge permissions"
+    echo ""
+    echo "   Check PR status manually: gh pr view $pr_num"
+  else
+    echo "✅ Auto-merge enabled for PR #$pr_num"
+    echo "   It will merge once all required checks pass."
+  fi
+  
+  echo ""
+  echo "📊 Quick status: gh pr-status $pr_num"
+}
 
-  echo "Done. Check status with: gh pr view --web"
+# Helper to check PR status with checks
+git-pr-status() {
+  local pr_num=$1
+  if [ -z "$pr_num" ]; then
+    # Try to get current PR
+    pr_num=$(gh pr view --json number -q '.number' 2>/dev/null)
+    if [ -z "$pr_num" ]; then
+      echo "Usage: git-pr-status <PR-number>"
+      return 1
+    fi
+  fi
+  
+  echo "🔍 PR #$pr_num Status:"
+  gh pr view $pr_num --json state,merged,mergeStateStatus,statusCheckRollup \
+    -q '"State: " + .state + " | Merged: " + (.merged|tostring) + " | Merge Status: " + .mergeStateStatus'
+  
+  echo ""
+  echo "🔧 Required Checks:"
+  gh pr checks $pr_num 2>&1 || echo "   No checks found or still pending"
 }
 ```
 
