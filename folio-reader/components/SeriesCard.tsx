@@ -21,6 +21,7 @@ interface Props {
   onContextMenu?: (seriesId: number | string, seriesName: string, x: number, y: number) => void;
   style?: any;
   cardWidth?: number;
+  coverVersion?: number; // Increment to force cover refresh after upload
 }
 
 function getFormatIcon(format: number): string {
@@ -32,7 +33,7 @@ function getFormatIcon(format: number): string {
   }
 }
 
-export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }: Props) {
+export const SeriesCard = React.memo(function SeriesCard({ series, onPress, onContextMenu, style, cardWidth, coverVersion }: Props) {
   const { colors } = useTheme();
   const progress = (series.progress || 0) * 100;
 
@@ -42,7 +43,8 @@ export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }:
 
   const provider = LibraryFactory.getProvider(seriesProvider);
   // Memoize coverUrl to prevent regeneration on every render (causes image reload flicker)
-  const coverUrl = useMemo(() => provider.getCoverUrl(series.id), [provider, series.id]);
+  // Include coverVersion in dependencies to force refresh after upload
+  const coverUrl = useMemo(() => provider.getCoverUrl(series.id), [provider, series.id, coverVersion]);
   const containerRef = useRef<View>(null);
 
   // DEBUG: Log cover URL for troubleshooting
@@ -116,9 +118,9 @@ export function SeriesCard({ series, onPress, onContextMenu, style, cardWidth }:
       <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{seriesTitle}</Text>
     </TouchableOpacity>
   );
-}
+});
 
-export function SeriesCardLarge({ series, onPress, onContextMenu }: Props) {
+export const SeriesCardLarge = React.memo(function SeriesCardLarge({ series, onPress, onContextMenu, coverVersion }: Props) {
   const { colors } = useTheme();
   const progress = (series.progress || 0) * 100;
   const isAbs = series.provider === 'abs' || series.mediaType === 'audiobook';
@@ -129,7 +131,8 @@ export function SeriesCardLarge({ series, onPress, onContextMenu }: Props) {
 
   const provider = LibraryFactory.getProvider(series.provider || 'kavita');
   // Memoize coverUrl to prevent regeneration on every render (causes image reload flicker)
-  const coverUrl = useMemo(() => provider.getCoverUrl(realId), [provider, realId]);
+  // Include coverVersion in dependencies to force refresh after upload
+  const coverUrl = useMemo(() => provider.getCoverUrl(realId), [provider, realId, coverVersion]);
   const containerRef = useRef<View>(null);
 
   useEffect(() => {
@@ -196,7 +199,7 @@ export function SeriesCardLarge({ series, onPress, onContextMenu }: Props) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   cardFallback: { flex: 1 },
