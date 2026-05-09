@@ -84,6 +84,8 @@ export const SeriesCard = React.memo(function SeriesCard({ series, onPress, onCo
           backgroundColor: colors.surface + 'CC', // Add transparency (CC = ~80% opacity)
           borderWidth: 1,
           borderColor: colors.border,
+          flex: 1, // Make cards stretch to fill row height
+          minHeight: 280, // Ensure minimum height for consistent row height
         },
         Platform.OS === 'web' && (styles as any).webHover
       ]}
@@ -121,7 +123,7 @@ export const SeriesCard = React.memo(function SeriesCard({ series, onPress, onCo
           </View>
         )}
       </View>
-      <View style={styles.titleContainer}>
+      <View style={[styles.titleContainer, { flex: 1 }]}>
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{seriesTitle}</Text>
       </View>
     </TouchableOpacity>

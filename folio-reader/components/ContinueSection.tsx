@@ -127,6 +127,17 @@ export function ContinueSection({
 
   return (
     <View style={{ marginBottom: Spacing.md }}>
+      {/* Top gradient divider */}
+      {Platform.OS === 'web' ? (
+        <div style={{
+          height: 1,
+          background: `radial-gradient(ellipse at center, ${colors.accent}50 0%, ${colors.secondary}55 25%, #8B6DB8 50%, #A85A95 75%, ${colors.secondary}65 100%)`,
+          marginBottom: Spacing.md,
+        }} />
+      ) : (
+        <View style={{ height: 1, backgroundColor: colors.border, marginBottom: Spacing.md }} />
+      )}
+
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, marginBottom: Spacing.sm, gap: Spacing.sm }}>
         <Text style={{ fontSize: Typography.sm, fontWeight: Typography.bold, color: colors.textPrimary }}>
@@ -155,6 +166,17 @@ export function ContinueSection({
           />
         ))}
       </ScrollView>
+
+      {/* Bottom gradient divider */}
+      {Platform.OS === 'web' ? (
+        <div style={{
+          height: 1,
+          background: `radial-gradient(ellipse at center, ${colors.accent}50 0%, ${colors.secondary}55 25%, #8B6DB8 50%, #A85A95 75%, ${colors.secondary}65 100%)`,
+          marginTop: Spacing.md,
+        }} />
+      ) : (
+        <View style={{ height: 1, backgroundColor: colors.border, marginTop: Spacing.md }} />
+      )}
     </View>
   );
 }

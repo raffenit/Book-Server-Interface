@@ -347,6 +347,9 @@ export default function AudiobooksScreen() {
     return withProgress;
   }, [allItems]);
 
+  // Show continue listening section if there are items with progress
+  const shouldShowContinueListening = continueListening.length > 0;
+
   async function handlePlay(item: LibraryItem) {
     if (nowPlaying?.item.id === item.id) {
       await togglePlayPause();
@@ -450,7 +453,7 @@ export default function AudiobooksScreen() {
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.accent} style={{ padding: Spacing.xl }} /> : null}
           ListHeaderComponent={
             <View>
-              {showContinueListening && (
+              {shouldShowContinueListening && (
                 <ContinueSection
                   title="Continue Listening"
                   items={continueListening.map((item): ContinueItem => ({
