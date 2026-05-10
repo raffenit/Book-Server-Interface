@@ -445,8 +445,8 @@ export default function AudiobooksScreen() {
             data={items}
             keyExtractor={i => String(i.id)}
             numColumns={numColumns}
-            contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: Spacing.base, gap: Spacing.sm }}
-            columnWrapperStyle={{ gap: Spacing.sm, marginBottom: Spacing.sm }}
+            contentContainerStyle={{ paddingBottom: 120, gap: Spacing.sm }}
+            columnWrapperStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.sm, marginBottom: Spacing.sm }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}

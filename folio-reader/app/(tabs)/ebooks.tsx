@@ -1054,8 +1054,8 @@ export default function EbooksScreen() {
           data={series}
           keyExtractor={(item) => item.id.toString()}
           numColumns={numColumns}
-          contentContainerStyle={{ paddingBottom: 80, paddingHorizontal: Spacing.base, backgroundColor: 'transparent' }}
-          columnWrapperStyle={{ gap: Spacing.sm, marginBottom: Spacing.sm }}
+          contentContainerStyle={{ paddingBottom: 80, backgroundColor: 'transparent' }}
+          columnWrapperStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.sm, marginBottom: Spacing.sm }}
         onScroll={(e) => { scrollPositionRef.current = e.nativeEvent.contentOffset.y; }}
         scrollEventThrottle={100}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
